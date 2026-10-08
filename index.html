@@ -141,7 +141,7 @@ details .content{padding:12px 16px 16px}
   margin-right:4px;vertical-align:middle}
 .map-legend .line{display:inline-block;width:18px;height:4px;border-radius:2px;
   margin-right:4px;vertical-align:middle}
-.report-map{position:relative;height:260px;border-radius:10px;overflow:hidden;
+.report-map{position:relative;height:280px;border-radius:10px;overflow:hidden;
   margin:8px 0;border:1px solid var(--border);background:#0d1117}
 .report-map .leaflet-container{background:#0d1117}
 .report-map-controls{position:absolute;top:8px;right:8px;z-index:800;
@@ -150,7 +150,15 @@ details .content{padding:12px 16px 16px}
   background:rgba(22,27,34,.9);color:var(--text);font-size:16px;
   cursor:pointer;display:flex;align-items:center;justify-content:center}
 .report-map-btn.active{background:var(--accent);border-color:var(--accent)}
-.wind-label div{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.wind-label div,
+.dist-label div,
+.other-wb-label div{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+}
+.dist-label div,
+.other-wb-label div{
+  pointer-events:auto;
+}
 :fullscreen{background:#000}
 :-webkit-full-screen{background:#000}
 #screen-map:fullscreen,
@@ -334,8 +342,10 @@ const OVERPASS_MIRRORS = [
   "https://overpass.kumi.systems/api/interpreter",
   "https://overpass.private.coffee/api/interpreter"
 ];
-const WATER_CACHE_KEY = "carp_water_body_v1";
+const WATER_CACHE_KEY = "carp_water_body_v2";
 const WATER_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const WATER_RADIUS_M = 8000;
+const WATER_MAX_RESULTS = 20;
 
 // ============================================================
 // УТИЛІТИ
@@ -445,7 +455,7 @@ function polygonShape(poly) {
     const dx = xs[i] - meanX, dy = ys[i] - meanY;
     sxx += dx*dx; syy += dy*dy; sxy += dx*dy;
   }
-  sxx /= xs.length; syy /= xs.length; sxy /= xs.length;
+  sxx /= xs.length; syy /= ys.length; sxy /= xs.length;
   const tr = sxx + syy;
   const det = sxx*syy - sxy*sxy;
   const disc = Math.sqrt(Math.max(0, tr*tr/4 - det));
@@ -830,7 +840,7 @@ function aromaAdvice(wTemp) {
 }
 
 // ============================================================
-// ВОДОЙМА
+// ВОДОЙМИ (Overpass)
 // ============================================================
 function _waterCacheGet(lat, lon) {
   try {
@@ -877,22 +887,30 @@ function _extractPolygons(data) {
   }
   return out;
 }
-async function fetchWaterBody(lat, lon) {
+
+async function fetchWaterBodies(lat, lon) {
   const cached = _waterCacheGet(lat, lon);
   if (cached !== undefined) return cached;
-  const query = `[out:json][timeout:15];
+
+  const query = `[out:json][timeout:20];
 (
-  way(around:1500,${lat},${lon})["natural"="water"];
-  way(around:1500,${lat},${lon})["waterway"="riverbank"];
-  way(around:1500,${lat},${lon})["landuse"="reservoir"];
-  way(around:1500,${lat},${lon})["landuse"="basin"];
-  relation(around:1500,${lat},${lon})["natural"="water"];
+  way(around:${WATER_RADIUS_M},${lat},${lon})["natural"="water"];
+  way(around:${WATER_RADIUS_M},${lat},${lon})["waterway"="riverbank"];
+  way(around:${WATER_RADIUS_M},${lat},${lon})["landuse"="reservoir"];
+  way(around:${WATER_RADIUS_M},${lat},${lon})["landuse"="basin"];
+  way(around:${WATER_RADIUS_M},${lat},${lon})["water"="lake"];
+  way(around:${WATER_RADIUS_M},${lat},${lon})["water"="pond"];
+  way(around:${WATER_RADIUS_M},${lat},${lon})["water"="reservoir"];
+  relation(around:${WATER_RADIUS_M},${lat},${lon})["natural"="water"];
+  relation(around:${WATER_RADIUS_M},${lat},${lon})["water"="lake"];
+  relation(around:${WATER_RADIUS_M},${lat},${lon})["water"="pond"];
 );
 out geom;`;
+
   for (const mirror of OVERPASS_MIRRORS) {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 12000);
+      const timeout = setTimeout(() => controller.abort(), 18000);
       const resp = await fetch(mirror, {
         method: "POST",
         headers: {"Content-Type": "application/x-www-form-urlencoded"},
@@ -903,24 +921,52 @@ out geom;`;
       if (!resp.ok) continue;
       const data = await resp.json();
       const polys = _extractPolygons(data);
-      if (!polys.length) { _waterCacheSet(lat, lon, null); return null; }
-      const containing = polys.find(p => pointInPolygon(lat, lon, p.coords));
-      let best;
-      if (containing) {
-        best = containing;
-      } else {
-        best = polys.slice().sort((a,b) => {
-          const da = distanceM([lat,lon], polygonCentroid(a.coords));
-          const db = distanceM([lat,lon], polygonCentroid(b.coords));
-          return da - db;
-        })[0];
+
+      const result = [];
+      for (const p of polys) {
+        if (!p.coords || p.coords.length < 3) continue;
+        const centroid = polygonCentroid(p.coords);
+        const dist = distanceM([lat, lon], centroid);
+        const areaM2 = polygonAreaM2(p.coords);
+        const areaHa = areaM2 / 10000;
+        if (areaHa < 0.01 || dist > WATER_RADIUS_M) continue;
+        result.push({
+          coords: p.coords,
+          tags: p.tags || {},
+          id: p.id,
+          centroid,
+          distance: Math.round(dist),
+          areaHa
+        });
       }
-      _waterCacheSet(lat, lon, best);
-      return best;
-    } catch (e) {}
+
+      result.sort((a, b) => a.distance - b.distance);
+      const top = result.slice(0, WATER_MAX_RESULTS);
+      _waterCacheSet(lat, lon, top);
+      return top;
+    } catch (e) { /* наступне дзеркало */ }
   }
-  return null;
+  return [];
 }
+
+function computeWbMod(waterBody) {
+  if (!waterBody || !waterBody.coords) {
+    return { windFactor: 1.0, areaHa: null, perimeterM: null, shape: null, name: null };
+  }
+  const areaM2 = polygonAreaM2(waterBody.coords);
+  const areaHa = areaM2 / 10000;
+  const perimeterM = polygonPerimeterM(waterBody.coords);
+  const shape = polygonShape(waterBody.coords);
+  let windFactor = 1.0;
+  if (areaHa < 0.5) windFactor = 0.5;
+  else if (areaHa < 2) windFactor = 0.7;
+  else if (areaHa < 10) windFactor = 1.0;
+  else if (areaHa < 100) windFactor = 1.2;
+  else windFactor = 1.4;
+  const name = (waterBody.tags && (waterBody.tags.name || waterBody.tags["name:uk"])) || null;
+  return { windFactor, areaHa, perimeterM, shape, name };
+}
+
 function computeShoreline(poly, windDir, windSpeed, mode) {
   const n = poly.length;
   if (n < 3) return [];
@@ -964,37 +1010,6 @@ function shoreColor(score) {
   if (score >= 65) return "#3fb950";
   if (score >= 45) return "#d29922";
   return "#f85149";
-}
-function drawScoredShoreline(map, poly, segments) {
-  const group = L.layerGroup();
-  for (const seg of segments) {
-    const c = shoreColor(seg.score);
-    const weight = seg.isBest ? 8 : 5;
-    const opacity = seg.isBest ? 1.0 : 0.75;
-    L.polyline(seg.coords, {
-      color: c, weight, opacity,
-      lineCap: "round", lineJoin: "round"
-    }).addTo(group);
-  }
-  group.addTo(map);
-  return group;
-}
-function computeWbMod(waterBody) {
-  if (!waterBody || !waterBody.coords) {
-    return { windFactor: 1.0, areaHa: null, perimeterM: null, shape: null, name: null };
-  }
-  const areaM2 = polygonAreaM2(waterBody.coords);
-  const areaHa = areaM2 / 10000;
-  const perimeterM = polygonPerimeterM(waterBody.coords);
-  const shape = polygonShape(waterBody.coords);
-  let windFactor = 1.0;
-  if (areaHa < 0.5) windFactor = 0.5;
-  else if (areaHa < 2) windFactor = 0.7;
-  else if (areaHa < 10) windFactor = 1.0;
-  else if (areaHa < 100) windFactor = 1.2;
-  else windFactor = 1.4;
-  const name = (waterBody.tags && waterBody.tags.name) || null;
-  return { windFactor, areaHa, perimeterM, shape, name };
 }
 
 // ============================================================
@@ -1069,6 +1084,7 @@ function generatePeacefulReport(snap, targetDate, wbMod) {
   const tolstolob = scoreTolstolob(trend.enum, snap.waterTemp, moon.tolstolob);
   return {
     kind: "peaceful", trend, moonName: moon.name, snap, targetDate, wbMod,
+    waterBodiesCount: (state.waterBodies || []).length,
     scores: {carp, crucian, amur, tolstolob},
     labels: {carp: carpLabel(carp), crucian: crucianLabel(crucian), amur: amurLabel(amur), tolstolob: tolstolobLabel(tolstolob)},
     advice: {
@@ -1092,6 +1108,7 @@ function generatePredatorReport(snap, targetDate, wbMod) {
   const zander = scoreZander(trend.enum, snap.waterTemp, snap.windSpeedMs, precip, light, wf);
   return {
     kind: "predator", trend, moonName: moon.name, tod, light, snap, targetDate, wbMod,
+    waterBodiesCount: (state.waterBodies || []).length,
     scores: {pike, perch, zander},
     labels: {pike: predatorLabel(pike), perch: predatorLabel(perch), zander: predatorLabel(zander)},
     advice: {
@@ -1140,12 +1157,20 @@ function renderAdviceDetails(title, adv) {
   const content = sections.map(([t, v]) => `<h3>${t}</h3><div style="white-space:pre-line;font-size:14px">${v}</div>`).join("");
   return `<details><summary>${title}</summary><div class="content">${content}</div></details>`;
 }
-function renderWaterBodyInfo(wbMod) {
-  if (!wbMod || wbMod.areaHa == null) return "";
+function renderWaterBodyInfo(wbMod, waterBodiesCount) {
+  if (!wbMod || wbMod.areaHa == null) {
+    if (waterBodiesCount > 0) {
+      return `<div class="info-box">
+        🌊 Знайдено водойм у радіусі 8 км: <strong>${waterBodiesCount}</strong><br>
+        Тапни на синій маркер на карті, щоб перемкнутись на іншу водойму.
+      </div>`;
+    }
+    return "";
+  }
   const name = wbMod.name ? `<strong>${wbMod.name}</strong> · ` : "";
   const area = wbMod.areaHa < 1
     ? `${(wbMod.areaHa * 10000).toFixed(0)} м²`
-    : `${wbMod.areaHa.toFixed(1)} га`;
+    : `${wbMod.areaHa.toFixed(2)} га`;
   const perim = wbMod.perimeterM < 1000
     ? `${wbMod.perimeterM.toFixed(0)} м`
     : `${(wbMod.perimeterM / 1000).toFixed(2)} км`;
@@ -1157,13 +1182,16 @@ function renderWaterBodyInfo(wbMod) {
       : wbMod.shape.elongation < 3 ? "витягнута"
       : "сильно витягнута")
     : "";
+  const extra = waterBodiesCount > 1
+    ? `<br>🌊 Поруч ще <strong>${waterBodiesCount - 1}</strong> водойм(а) в радіусі 8 км — тапни синій маркер`
+    : "";
   return `<div class="info-box">
     🌊 <strong>Водойма:</strong> ${name}${area}<br>
     📏 Периметр: ${perim}<br>
-    📐 Форма: ${shapeDesc} (×${elong}), орієнтація ~${orient}°
+    📐 Форма: ${shapeDesc} (×${elong}), орієнтація ~${orient}°${extra}
   </div>`;
 }
-function renderReportMapBlock(windFrom, windSpeedMs, isPredator, wbMod) {
+function renderReportMapBlock(windFrom, windSpeedMs, isPredator, wbMod, waterBodiesCount) {
   const legendLeeward = isPredator
     ? `<span><span class="line" style="background:#3fb950"></span>Підвітряний — спокійна вода</span>`
     : `<span><span class="line" style="background:#3fb950"></span>Підвітряний — корм і кисень</span>`;
@@ -1175,6 +1203,9 @@ function renderReportMapBlock(windFrom, windSpeedMs, isPredator, wbMod) {
   const hint = isPredator
     ? `💨 Хижаки: помірний «ряб» на навітряному березі. Вітер ${windSpeedMs.toFixed(1)} м/с з ${windFrom}.`
     : `💨 Мирна риба: підвітряний берег (зелений). Вітер ${windSpeedMs.toFixed(1)} м/с з ${windFrom}.`;
+  const extra = waterBodiesCount > 1
+    ? `<div class="hint">🌊 Ще <strong>${waterBodiesCount - 1}</strong> водойм(а) на карті — тапни синій маркер для перемикання</div>`
+    : "";
   return `
     <div class="card">
       <h2>🗺 Рекомендований берег</h2>
@@ -1186,12 +1217,13 @@ function renderReportMapBlock(windFrom, windSpeedMs, isPredator, wbMod) {
         </div>
       </div>
       <div class="map-legend">${legendLeeward}${legendYellow}${legendWindward}</div>
-      <div class="hint">${hasWb ? "🟢 топ-3 місця — товстіша лінія" : "Контур водойми не знайдено в OSM"}</div>
+      <div class="hint">${hasWb ? "🎯 Жовта стрілка — топ-місце. Зелені сегменти — топ-3." : "Контур водойми не знайдено в OSM"}</div>
       <div class="hint">${hint}</div>
+      ${extra}
     </div>`;
 }
 function renderPeacefulReport(report) {
-  const {scores, labels, snap, trend, moonName, targetDate, advice, aroma, wbMod} = report;
+  const {scores, labels, snap, trend, moonName, targetDate, advice, aroma, wbMod, waterBodiesCount} = report;
   const dateStr = `${targetDate.getFullYear()}-${pad2(targetDate.getMonth()+1)}-${pad2(targetDate.getDate())} ${pad2(targetDate.getHours())}:00`;
   return `
     <div class="card">
@@ -1201,7 +1233,7 @@ function renderPeacefulReport(report) {
       ${renderScoreRow("🐠 Білий амур", scores.amur, labels.amur)}
       ${renderScoreRow("🐟 Товстолоб", scores.tolstolob, labels.tolstolob)}
     </div>
-    ${renderWaterBodyInfo(wbMod)}
+    ${renderWaterBodyInfo(wbMod, waterBodiesCount || 0)}
     <div class="card">
       <h2>🌤 Погода · ${dateStr}</h2>
       ${renderWeatherGrid(snap, moonName)}
@@ -1213,7 +1245,7 @@ function renderPeacefulReport(report) {
         <div class="trend-desc">${trend.desc}</div>
       </div>
     </div>
-    ${renderReportMapBlock(snap.windFrom, snap.windSpeedMs, false, wbMod)}
+    ${renderReportMapBlock(snap.windFrom, snap.windSpeedMs, false, wbMod, waterBodiesCount || 0)}
     <div class="card">
       <h2>📈 Активність мирних · 11 днів</h2>
       <div class="chart-wrap tall"><canvas id="chart11"></canvas></div>
@@ -1237,7 +1269,7 @@ function renderPeacefulReport(report) {
     </div>`;
 }
 function renderPredatorReport(report) {
-  const {scores, labels, snap, trend, moonName, targetDate, advice, light, tod, wbMod} = report;
+  const {scores, labels, snap, trend, moonName, targetDate, advice, light, tod, wbMod, waterBodiesCount} = report;
   const dateStr = `${targetDate.getFullYear()}-${pad2(targetDate.getMonth()+1)}-${pad2(targetDate.getDate())} ${pad2(targetDate.getHours())}:00`;
   return `
     <div class="card">
@@ -1246,7 +1278,7 @@ function renderPredatorReport(report) {
       ${renderScoreRow("🐟 Окунь", scores.perch, labels.perch)}
       ${renderScoreRow("🐡 Судак", scores.zander, labels.zander)}
     </div>
-    ${renderWaterBodyInfo(wbMod)}
+    ${renderWaterBodyInfo(wbMod, waterBodiesCount || 0)}
     <div class="card">
       <h2>🌅 Умови освітлення</h2>
       <div style="font-size:14px">${lightLabel(light)} · ${todLabel(tod)}</div>
@@ -1262,7 +1294,7 @@ function renderPredatorReport(report) {
         <div class="trend-desc">${trend.desc}</div>
       </div>
     </div>
-    ${renderReportMapBlock(snap.windFrom, snap.windSpeedMs, true, wbMod)}
+    ${renderReportMapBlock(snap.windFrom, snap.windSpeedMs, true, wbMod, waterBodiesCount || 0)}
     <div class="card">
       <h2>📈 Активність хижаків · 24 години</h2>
       <div class="chart-wrap tall"><canvas id="chart24"></canvas></div>
@@ -1582,7 +1614,9 @@ function reorderMapLayers(map) {
   if (map._depthLayer) map._depthLayer.bringToFront();
   if (map._roadsLayer) map._roadsLayer.bringToFront();
   if (map._labelsLayer) map._labelsLayer.bringToFront();
+  if (map._otherWbGroup) map._otherWbGroup.bringToFront();
   if (map._shoreGroup) map._shoreGroup.bringToFront();
+  if (map._arrowGroup) map._arrowGroup.bringToFront();
   if (map._windGroup) map._windGroup.bringToFront();
 }
 function toggleDepthLayer(map, enabled) {
@@ -1639,16 +1673,99 @@ function addWindOverlay(map, center, windDir, windSpeedMs, radiusM) {
   reorderMapLayers(map);
   return group;
 }
-function addWaterBodyLayer(map, waterBody, segments, mode) {
-  if (!map || !waterBody || !waterBody.coords) return;
+function addWaterBodyLayer(map, waterBodies, activeIdx, windDir, windSpeed, mode) {
+  if (!map || !waterBodies || !waterBodies.length) return;
+
   if (map._shoreGroup) { map.removeLayer(map._shoreGroup); map._shoreGroup = null; }
-  if (map._wbOutline) { map.removeLayer(map._wbOutline); map._wbOutline = null; }
-  map._wbOutline = L.polygon(waterBody.coords, {
-    color: "#58a6ff", weight: 1.5, opacity: 0.5, fill: false, dashArray: "2,4"
-  }).addTo(map);
-  if (segments && segments.length) {
-    map._shoreGroup = drawScoredShoreline(map, waterBody.coords, segments);
+  if (map._otherWbGroup) { map.removeLayer(map._otherWbGroup); map._otherWbGroup = null; }
+  if (map._arrowGroup) { map.removeLayer(map._arrowGroup); map._arrowGroup = null; }
+
+  const shoreGroup = L.layerGroup();
+  const otherGroup = L.layerGroup();
+  const arrowGroup = L.layerGroup();
+
+  // Інші водойми (сірий тонкий контур)
+  for (let idx = 0; idx < waterBodies.length; idx++) {
+    if (idx === activeIdx) continue;
+    const wb = waterBodies[idx];
+    L.polygon(wb.coords, {
+      color: "#8b949e", weight: 1.5, opacity: 0.55,
+      fillColor: "#58a6ff", fillOpacity: 0.10, dashArray: "3,4"
+    }).addTo(otherGroup);
   }
+
+  const active = waterBodies[activeIdx];
+  if (!active) { shoreGroup.addTo(map); otherGroup.addTo(map); return; }
+
+  // Синє тло активної водойми
+  L.polygon(active.coords, {
+    color: "#58a6ff", weight: 2, opacity: 0.7,
+    fillColor: "#58a6ff", fillOpacity: 0.15
+  }).addTo(shoreGroup);
+
+  // Кольорові сегменти берега
+  const segments = computeShoreline(active.coords, windDir, windSpeed, mode);
+  for (const seg of segments) {
+    const c = shoreColor(seg.score);
+    const weight = seg.isBest ? 10 : 6;
+    const opacity = seg.isBest ? 1.0 : 0.85;
+    L.polyline(seg.coords, {
+      color: c, weight, opacity,
+      lineCap: "round", lineJoin: "round"
+    }).addTo(shoreGroup);
+  }
+
+  // Стрілка від користувача до топ-сегмента
+  const bestSeg = segments.find(s => s.isBest) || segments[0];
+  if (bestSeg && state.lat != null && state.lon != null) {
+    const userPt = [state.lat, state.lon];
+    const targetPt = bestSeg.mid;
+    const dist = Math.round(distanceM(userPt, targetPt));
+
+    L.polyline([userPt, targetPt], {
+      color: "#ffd700", weight: 3, opacity: 0.9, dashArray: "6,4"
+    }).addTo(arrowGroup);
+
+    const midPt = [(userPt[0] + targetPt[0]) / 2, (userPt[1] + targetPt[1]) / 2];
+    L.marker(midPt, {
+      icon: L.divIcon({
+        className: "dist-label",
+        html: `<div style="background:rgba(13,17,23,.95);color:#ffd700;padding:4px 10px;border-radius:6px;font-size:13px;font-weight:700;white-space:nowrap;border:1px solid #ffd700;box-shadow:0 2px 6px rgba(0,0,0,.5);">🎯 ${dist} м</div>`,
+        iconSize: [0, 0]
+      })
+    }).addTo(arrowGroup);
+
+    L.circleMarker(targetPt, {
+      radius: 8, fillColor: "#ffd700", color: "#ffffff",
+      weight: 3, fillOpacity: 1
+    }).addTo(arrowGroup);
+  }
+
+  // Маркери інших водойм
+  for (let idx = 0; idx < waterBodies.length; idx++) {
+    if (idx === activeIdx) continue;
+    const wb = waterBodies[idx];
+    const marker = L.marker(wb.centroid, {
+      icon: L.divIcon({
+        className: "other-wb-label",
+        html: `<div style="background:rgba(88,166,255,.92);color:#fff;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:600;white-space:nowrap;cursor:pointer;border:1px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.5);">💧 ${wb.distance} м</div>`,
+        iconSize: [0, 0]
+      })
+    });
+    marker.on("click", () => {
+      state.activeWaterBodyIdx = idx;
+      renderReportMap("reportMap", window._currentSnap, waterBodies, mode);
+    });
+    marker.addTo(otherGroup);
+  }
+
+  shoreGroup.addTo(map);
+  otherGroup.addTo(map);
+  arrowGroup.addTo(map);
+  map._shoreGroup = shoreGroup;
+  map._otherWbGroup = otherGroup;
+  map._arrowGroup = arrowGroup;
+
   reorderMapLayers(map);
 }
 function toggleFullscreen(el) {
@@ -1705,11 +1822,12 @@ function updateDepthButtonState(enabled) {
   if (!btn) return;
   btn.classList.toggle("active", enabled);
 }
-function renderReportMap(containerId, snap, waterBody, mode) {
+function renderReportMap(containerId, snap, waterBodies, mode) {
   requestAnimationFrame(() => {
     const el = document.getElementById(containerId);
     if (!el) return;
     if (reportMap) { reportMap.remove(); reportMap = null; }
+
     const center = [state.lat, state.lon];
     const localMap = L.map(containerId, {
       center, zoom: 14, zoomControl: false, dragging: true, touchZoom: true,
@@ -1717,21 +1835,35 @@ function renderReportMap(containerId, snap, waterBody, mode) {
       keyboard: false, tap: true, attributionControl: false
     });
     reportMap = localMap;
+
     ensureLabelsPane(localMap);
     applyTile(localMap, "satellite");
-    if (waterBody && waterBody.coords) {
-      const segments = computeShoreline(waterBody.coords, snap.windDirDeg, snap.windSpeedMs, mode);
-      addWaterBodyLayer(localMap, waterBody, segments, mode);
-      try {
-        const bounds = L.latLngBounds(waterBody.coords.map(c => [c[0], c[1]]));
-        if (bounds.isValid()) localMap.fitBounds(bounds, {padding: [30, 30], maxZoom: 16});
-      } catch (e) {}
+
+    if (waterBodies && waterBodies.length) {
+      const activeIdx = state.activeWaterBodyIdx || 0;
+      addWaterBodyLayer(localMap, waterBodies, activeIdx, snap.windDirDeg, snap.windSpeedMs, mode);
+
+      const active = waterBodies[activeIdx];
+      if (active) {
+        try {
+          const bounds = L.latLngBounds(active.coords.map(c => [c[0], c[1]]));
+          bounds.extend([state.lat, state.lon]);
+          if (bounds.isValid()) localMap.fitBounds(bounds, {padding: [40, 40], maxZoom: 16});
+        } catch (e) {}
+      }
     } else {
       addWindOverlay(localMap, center, snap.windDirDeg, snap.windSpeedMs, 350);
     }
+
+    // Позначка користувача
+    L.circleMarker(center, {
+      radius: 6, fillColor: "#58a6ff", color: "#ffffff", weight: 3, fillOpacity: 1
+    }).addTo(localMap);
+
     toggleDepthLayer(localMap, reportDepthEnabled);
     updateReportDepthButtonState();
     setTimeout(() => { if (localMap) localMap.invalidateSize(); }, 100);
+
     const btnLayer = document.getElementById("btnReportLayer");
     const btnDepth = document.getElementById("btnReportDepth");
     const btnFs = document.getElementById("btnReportFullscreen");
@@ -1760,7 +1892,9 @@ function updateReportDepthButtonState() {
 // ============================================================
 const state = {
   lat: null, lon: null, dateOffset: 0, mode: "peaceful",
-  weatherData: null, targetDate: null, waterBody: null, screen: "input"
+  weatherData: null, targetDate: null,
+  waterBodies: [], activeWaterBodyIdx: 0,
+  screen: "input"
 };
 const $ = id => document.getElementById(id);
 const screenInput = $("screen-input");
@@ -1848,160 +1982,37 @@ async function runForecast(mode) {
     state.targetDate.setHours(6, 0, 0, 0);
   }
   destroyAllCharts();
-  screenReport.innerHTML = `<div class="loading"><div class="spinner"></div><div>Отримую метеодані та контур водойми...</div></div>`;
+  screenReport.innerHTML = `<div class="loading"><div class="spinner"></div><div>Отримую метеодані та водойми...</div></div>`;
   showScreen("report");
   try {
-    const [weatherData, waterBody] = await Promise.all([
+    const [weatherData, waterBodies] = await Promise.all([
       fetchWeather(state.lat, state.lon),
-      fetchWaterBody(state.lat, state.lon).catch(() => null)
+      fetchWaterBodies(state.lat, state.lon).catch(() => [])
     ]);
     if (token !== _forecastToken) return;
+
     state.weatherData = weatherData;
-    state.waterBody = waterBody;
-    const wbMod = computeWbMod(waterBody);
+    state.waterBodies = waterBodies || [];
+    state.activeWaterBodyIdx = 0;
+
+    const activeWaterBody = state.waterBodies[0] || null;
+    const wbMod = computeWbMod(activeWaterBody);
     const snap = buildSnapshot(weatherData, state.targetDate);
+    window._currentSnap = snap;
+
     const report = mode === "peaceful"
       ? generatePeacefulReport(snap, state.targetDate, wbMod)
       : generatePredatorReport(snap, state.targetDate, wbMod);
+
     screenReport.innerHTML = mode === "peaceful"
       ? renderPeacefulReport(report)
       : renderPredatorReport(report);
+
     setTimeout(() => {
       if (token !== _forecastToken) return;
       drawPressureChart("chartP", snap);
       if (mode === "peaceful") draw11DayChart("chart11", weatherData);
       else draw24hChart("chart24", weatherData, state.targetDate);
-      renderReportMap("reportMap", snap, waterBody, mode);
+      renderReportMap("reportMap", snap, state.waterBodies, mode);
     }, 150);
-  } catch (err) {
-    if (token !== _forecastToken) return;
-    screenReport.innerHTML = `<div class="card"><div class="error">❌ ${err.message}</div>
-      <button class="btn secondary" onclick="showScreen('select')">← Назад</button></div>`;
-  }
-}
-
-// ============================================================
-// ОБРОБНИКИ
-// ============================================================
-$("btnGeo").addEventListener("click", () => {
-  if (!navigator.geolocation) { alert("Геолокація недоступна"); return; }
-  $("btnGeo").disabled = true;
-  $("btnGeo").textContent = "⏳ Визначаю...";
-  navigator.geolocation.getCurrentPosition(
-    pos => {
-      state.lat = pos.coords.latitude;
-      state.lon = pos.coords.longitude;
-      $("btnGeo").disabled = false;
-      $("btnGeo").innerHTML = '<span class="btn-icon">📡</span>Моє місце (геолокація)';
-      goToSelect();
-    },
-    err => {
-      $("btnGeo").disabled = false;
-      $("btnGeo").innerHTML = '<span class="btn-icon">📡</span>Моє місце (геолокація)';
-      alert("Не вдалося отримати геолокацію: " + err.message);
-    },
-    {enableHighAccuracy: false, timeout: 10000, maximumAge: 300000}
-  );
-});
-$("btnPickMap").addEventListener("click", openPickerMap);
-$("btnManual").addEventListener("click", () => {
-  const lat = parseFloat($("inpLat").value);
-  const lon = parseFloat($("inpLon").value);
-  if (isNaN(lat) || isNaN(lon)) { alert("Введіть широту та довготу"); return; }
-  if (lat < -90 || lat > 90) { alert("Широта в межах [-90, 90]"); return; }
-  if (lon < -180 || lon > 180) { alert("Довгота в межах [-180, 180]"); return; }
-  state.lat = lat; state.lon = lon;
-  goToSelect();
-});
-document.querySelectorAll("#dateChips .chip").forEach(chip => {
-  chip.addEventListener("click", () => {
-    document.querySelectorAll("#dateChips .chip").forEach(c => c.classList.remove("active"));
-    chip.classList.add("active");
-    state.dateOffset = parseInt(chip.dataset.offset, 10);
-  });
-});
-document.querySelectorAll(".mode-card").forEach(card => {
-  card.addEventListener("click", () => runForecast(card.dataset.mode));
-});
-$("btnMapCancel").addEventListener("click", () => showScreen("input"));
-$("btnMapConfirm").addEventListener("click", () => {
-  if (!pickerMap) return;
-  const c = pickerMap.getCenter();
-  state.lat = c.lat; state.lon = c.lng;
-  $("inpLat").value = c.lat.toFixed(5);
-  $("inpLon").value = c.lng.toFixed(5);
-  goToSelect();
-});
-$("btnMapLayer").addEventListener("click", () => {
-  currentLayerType = currentLayerType === "satellite" ? "osm" : "satellite";
-  $("btnMapLayer").textContent = currentLayerType === "satellite" ? "🛰" : "🗺";
-  applyTile(pickerMap, currentLayerType);
-});
-$("btnDepthToggle").addEventListener("click", () => {
-  if (!pickerMap) return;
-  pickerDepthEnabled = !pickerDepthEnabled;
-  toggleDepthLayer(pickerMap, pickerDepthEnabled);
-  updateDepthButtonState(pickerDepthEnabled);
-});
-$("btnMapLocate").addEventListener("click", () => {
-  if (!pickerMap || !navigator.geolocation) return;
-  pickerMap.locate({ setView: true, maxZoom: 16, enableHighAccuracy: false, timeout: 8000 });
-  pickerMap.once("locationfound", e => {
-    state.lat = e.latlng.lat; state.lon = e.latlng.lng;
-    updatePickerCoordLabel();
-  });
-});
-$("btnMapFullscreen").addEventListener("click", () => toggleFullscreen(screenMap));
-
-// ============================================================
-// PWA
-// ============================================================
-(function setupPWA() {
-  function makeIcon(size) {
-    const c = document.createElement("canvas");
-    c.width = c.height = size;
-    const ctx = c.getContext("2d");
-    const grad = ctx.createLinearGradient(0, 0, size, size);
-    grad.addColorStop(0, "#0d1117"); grad.addColorStop(1, "#161b22");
-    ctx.fillStyle = grad; ctx.fillRect(0, 0, size, size);
-    ctx.font = `${size*0.65}px serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText("🎣", size/2, size/2 + size*0.05);
-    return c.toDataURL("image/png");
-  }
-  const manifest = {
-    name: "Кльов — прогноз риболовлі", short_name: "Кльов",
-    description: "Прогноз кльову мирних риб та хижаків",
-    start_url: ".", scope: ".", display: "standalone", orientation: "portrait",
-    background_color: "#0d1117", theme_color: "#0d1117", lang: "uk",
-    icons: [
-      {src: makeIcon(192), sizes: "192x192", type: "image/png", purpose: "any maskable"},
-      {src: makeIcon(512), sizes: "512x512", type: "image/png", purpose: "any maskable"}
-    ]
-  };
-  const blob = new Blob([JSON.stringify(manifest)], {type: "application/manifest+json"});
-  const link = document.createElement("link");
-  link.rel = "manifest";
-  link.href = URL.createObjectURL(blob);
-  document.head.appendChild(link);
-  const appleIcon = document.createElement("link");
-  appleIcon.rel = "apple-touch-icon";
-  appleIcon.href = makeIcon(180);
-  document.head.appendChild(appleIcon);
-})();
-
-// ============================================================
-// СТАРТ
-// ============================================================
-renderHistory();
-updateDateChips();
-(function readUrlParams() {
-  const p = new URLSearchParams(location.search);
-  const lat = parseFloat(p.get("lat")), lon = parseFloat(p.get("lon"));
-  if (!isNaN(lat) && !isNaN(lon)) {
-    state.lat = lat; state.lon = lon;
-    goToSelect();
-  }
-})();
-</script>
-</body>
-</html>
+  } catch (err
