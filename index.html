@@ -1,0 +1,2007 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Кльов">
+<title>🎣 Кльов — прогноз</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<style>
+:root{
+  --bg:#0d1117; --bg2:#161b22; --bg3:#21262d;
+  --border:#30363d; --text:#e6edf3; --text2:#8b949e;
+  --accent:#238636; --accent2:#2ea043;
+  --blue:#58a6ff; --red:#f85149; --yellow:#d29922;
+  --green:#3fb950; --orange:#f0883e; --purple:#bc8cff;
+  --radius:12px; --pad:16px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;overscroll-behavior-y:contain}
+body{padding-bottom:env(safe-area-inset-bottom)}
+#topbar{position:sticky;top:0;z-index:100;background:var(--bg2);
+  border-bottom:1px solid var(--border);padding:12px var(--pad);
+  padding-top:calc(12px + env(safe-area-inset-top));
+  display:flex;align-items:center;gap:12px;min-height:52px}
+#topbarTitle{font-weight:700;font-size:17px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#topbarBack{background:none;border:none;color:var(--text);font-size:22px;
+  padding:4px 8px;cursor:pointer;border-radius:8px}
+#topbarBack:hover{background:var(--bg3)}
+.hidden{display:none!important}
+main{padding:var(--pad);max-width:640px;margin:0 auto}
+.screen{display:none}
+.screen.active{display:block;animation:fadein .2s}
+@keyframes fadein{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.card{background:var(--bg2);border:1px solid var(--border);
+  border-radius:var(--radius);padding:var(--pad);margin-bottom:14px}
+.card h2{margin:0 0 14px 0;font-size:15px;color:var(--text2);
+  text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.card h3{margin:14px 0 6px 0;font-size:14px;color:var(--blue);font-weight:600}
+.card ul{margin:6px 0;padding-left:22px}
+.card li{margin:4px 0}
+.btn{display:block;width:100%;padding:16px;border:none;border-radius:var(--radius);
+  background:var(--accent);color:white;font-size:16px;font-weight:600;
+  cursor:pointer;margin-bottom:10px;transition:background .15s}
+.btn:hover,.btn:active{background:var(--accent2)}
+.btn.secondary{background:var(--bg3);color:var(--text);border:1px solid var(--border)}
+.btn.secondary:hover{background:#2d333b}
+.btn-icon{font-size:20px;margin-right:8px;vertical-align:middle}
+.field{display:block;margin-bottom:10px}
+.field label{display:block;font-size:13px;color:var(--text2);margin-bottom:4px}
+.field input{width:100%;padding:12px;background:var(--bg3);border:1px solid var(--border);
+  border-radius:8px;color:var(--text);font-size:15px;-webkit-appearance:none}
+.field input:focus{outline:none;border-color:var(--accent)}
+.chips{display:flex;gap:8px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px}
+.chip{flex:1;min-width:90px;padding:12px 8px;border:1px solid var(--border);
+  border-radius:10px;background:var(--bg3);color:var(--text);text-align:center;
+  font-size:13px;cursor:pointer;transition:all .15s}
+.chip.active{background:var(--accent);border-color:var(--accent);color:white;font-weight:600}
+.chip .date{display:block;font-size:11px;color:var(--text2);margin-top:2px}
+.chip.active .date{color:rgba(255,255,255,.75)}
+.mode-card{display:flex;align-items:center;gap:14px;padding:18px;
+  background:var(--bg3);border:1px solid var(--border);border-radius:12px;
+  margin-bottom:10px;cursor:pointer;transition:all .15s}
+.mode-card:hover,.mode-card:active{border-color:var(--accent);background:#1f2733}
+.mode-card .icon{font-size:32px}
+.mode-card .title{font-weight:600;font-size:16px;margin-bottom:2px}
+.mode-card .desc{font-size:13px;color:var(--text2)}
+.score-row{display:flex;align-items:center;gap:10px;margin:10px 0}
+.score-row .label{flex:0 0 110px;font-size:14px}
+.score-row .bar{flex:1;height:8px;background:var(--bg3);border-radius:4px;overflow:hidden}
+.score-row .fill{height:100%;border-radius:4px;transition:width .5s}
+.score-row .val{flex:0 0 52px;text-align:right;font-weight:600;font-size:14px}
+.weather-grid{display:grid;grid-template-columns:auto 1fr;gap:8px 12px;font-size:14px}
+.weather-grid .k{color:var(--text2)}
+.weather-grid .v{font-weight:500}
+.trend-box{background:var(--bg3);border-radius:10px;padding:12px;margin-top:8px}
+.trend-title{font-weight:700;font-size:15px;margin-bottom:6px}
+.trend-desc{font-size:13.5px;color:var(--text2);line-height:1.5}
+details{background:var(--bg3);border:1px solid var(--border);border-radius:10px;
+  margin-bottom:10px;overflow:hidden}
+details summary{padding:14px 16px;cursor:pointer;font-weight:600;font-size:15px;
+  display:flex;align-items:center;justify-content:space-between;list-style:none}
+details summary::-webkit-details-marker{display:none}
+details summary::after{content:"▾";color:var(--text2);transition:transform .2s}
+details[open] summary::after{transform:rotate(180deg)}
+details[open] summary{border-bottom:1px solid var(--border)}
+details .content{padding:12px 16px 16px}
+.chart-wrap{position:relative;height:220px;margin:8px 0}
+.chart-wrap.tall{height:280px}
+.chart-wrap.pressure{height:200px}
+.hint{font-size:12.5px;color:var(--text2);margin-top:4px}
+.error{background:rgba(248,81,73,.1);border:1px solid var(--red);color:var(--red);
+  padding:12px;border-radius:10px;font-size:14px;margin-bottom:10px}
+.warn{background:rgba(210,153,34,.1);border:1px solid var(--yellow);color:var(--yellow);
+  padding:12px;border-radius:10px;font-size:14px;margin-bottom:10px}
+.info-box{background:rgba(88,166,255,.1);border:1px solid var(--blue);color:var(--text);
+  padding:12px;border-radius:10px;font-size:14px;margin-bottom:10px}
+.loading{text-align:center;padding:40px 0;color:var(--text2)}
+.spinner{display:inline-block;width:32px;height:32px;border:3px solid var(--bg3);
+  border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.history-item{display:block;width:100%;text-align:left;padding:12px 14px;
+  background:var(--bg3);border:1px solid var(--border);border-radius:8px;
+  color:var(--text);font-size:14px;margin-bottom:6px;cursor:pointer}
+.history-item:hover{border-color:var(--accent)}
+@media(max-width:400px){
+  .score-row .label{flex-basis:95px;font-size:13px}
+  .weather-grid{font-size:13px}
+}
+#screen-map{position:relative;height:calc(100vh - 52px - env(safe-area-inset-top));
+  overflow:hidden;padding:0}
+#pickerMap{position:absolute;inset:0;width:100%;height:100%;z-index:1}
+.map-crosshair{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  pointer-events:none;z-index:500;filter:drop-shadow(0 0 4px rgba(0,0,0,.9))}
+.map-controls-top{position:absolute;top:12px;right:12px;z-index:1000;
+  display:flex;flex-direction:column;gap:8px}
+.map-btn{width:44px;height:44px;border-radius:10px;border:1px solid var(--border);
+  background:rgba(22,27,34,.92);color:var(--text);font-size:20px;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);transition:background .15s}
+.map-btn:active{background:var(--accent)}
+.map-btn.active{background:var(--accent);border-color:var(--accent)}
+.map-controls-bottom{position:absolute;bottom:0;left:0;right:0;z-index:1000;
+  background:linear-gradient(to top, rgba(13,17,23,.98) 60%, rgba(13,17,23,0));
+  padding:20px var(--pad) calc(16px + env(safe-area-inset-bottom))}
+.map-coord-display{text-align:center;color:var(--text);
+  font-family:ui-monospace,Menlo,monospace;font-size:13px;margin-bottom:10px;
+  text-shadow:0 0 6px rgba(0,0,0,.9)}
+.map-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;
+  color:var(--text2);margin-top:8px}
+.map-legend .dot{display:inline-block;width:10px;height:10px;border-radius:50%;
+  margin-right:4px;vertical-align:middle}
+.map-legend .line{display:inline-block;width:18px;height:4px;border-radius:2px;
+  margin-right:4px;vertical-align:middle}
+.report-map{position:relative;height:260px;border-radius:10px;overflow:hidden;
+  margin:8px 0;border:1px solid var(--border);background:#0d1117}
+.report-map .leaflet-container{background:#0d1117}
+.report-map-controls{position:absolute;top:8px;right:8px;z-index:800;
+  display:flex;flex-direction:column;gap:6px}
+.report-map-btn{width:36px;height:36px;border-radius:8px;border:1px solid var(--border);
+  background:rgba(22,27,34,.9);color:var(--text);font-size:16px;
+  cursor:pointer;display:flex;align-items:center;justify-content:center}
+.report-map-btn.active{background:var(--accent);border-color:var(--accent)}
+.wind-label div{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+:fullscreen{background:#000}
+:-webkit-full-screen{background:#000}
+#screen-map:fullscreen,
+#screen-map:-webkit-full-screen{height:100vh!important;width:100vw!important;background:#000}
+.report-map:fullscreen,
+.report-map:-webkit-full-screen{
+  height:100vh!important;width:100vw!important;
+  border-radius:0!important;border:none!important;margin:0!important;background:#000}
+.leaflet-bar a,
+.leaflet-touch .leaflet-bar a{
+  background:rgba(22,27,34,.92)!important;color:var(--text)!important;
+  border-bottom-color:var(--border)!important;font-size:16px!important;
+  line-height:26px!important;width:28px!important;height:28px!important}
+.leaflet-bar a:hover{background:var(--accent)!important}
+.leaflet-control-attribution{
+  background:rgba(13,17,23,.7)!important;color:var(--text2)!important;font-size:10px!important}
+.leaflet-control-attribution a{color:var(--blue)!important}
+</style>
+</head>
+<body>
+
+<header id="topbar">
+  <button id="topbarBack" class="hidden" aria-label="Назад">←</button>
+  <div id="topbarTitle">🎣 Кльов — прогноз</div>
+</header>
+
+<main id="app">
+
+  <section id="screen-input" class="screen active">
+    <div class="card">
+      <h2>📍 Локація</h2>
+      <button class="btn" id="btnGeo">
+        <span class="btn-icon">📡</span>Моє місце (геолокація)
+      </button>
+      <button class="btn secondary" id="btnPickMap">
+        <span class="btn-icon">🗺</span>Обрати на карті
+      </button>
+      <div style="text-align:center;color:var(--text2);font-size:13px;margin:6px 0">— або введіть вручну —</div>
+      <label class="field">
+        <label for="inpLat">Широта</label>
+        <input id="inpLat" type="number" step="0.0001" placeholder="49.23" inputmode="decimal">
+      </label>
+      <label class="field">
+        <label for="inpLon">Довгота</label>
+        <input id="inpLon" type="number" step="0.0001" placeholder="28.46" inputmode="decimal">
+      </label>
+      <button class="btn" id="btnManual">🔍 Побудувати прогноз</button>
+      <div class="hint">Приклад: <code>49.23, 28.46</code> — координати у десяткових градусах.</div>
+    </div>
+
+    <div class="card" id="historyCard" style="display:none">
+      <h2>📚 Нещодавні місця</h2>
+      <div id="historyList"></div>
+    </div>
+  </section>
+
+  <section id="screen-select" class="screen">
+    <div class="card">
+      <h2>📅 Дата</h2>
+      <div class="chips" id="dateChips">
+        <button class="chip active" data-offset="0">Сьогодні<span class="date" id="d0"></span></button>
+        <button class="chip" data-offset="1">Завтра<span class="date" id="d1"></span></button>
+        <button class="chip" data-offset="2">Післязавтра<span class="date" id="d2"></span></button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>🎣 Що ловимо?</h2>
+      <div class="mode-card" data-mode="peaceful">
+        <div class="icon">🐟</div>
+        <div>
+          <div class="title">Мирні риби</div>
+          <div class="desc">Короп, карась, білий амур, товстолоб</div>
+        </div>
+      </div>
+      <div class="mode-card" data-mode="predator">
+        <div class="icon">🦈</div>
+        <div>
+          <div class="title">Хижаки</div>
+          <div class="desc">Щука, окунь, судак</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="screen-report" class="screen">
+    <div id="reportContent"></div>
+  </section>
+
+  <section id="screen-map" class="screen">
+    <div id="pickerMap"></div>
+    <div class="map-crosshair">
+      <svg width="44" height="44" viewBox="0 0 44 44" aria-hidden="true">
+        <circle cx="22" cy="22" r="7" fill="none" stroke="#238636" stroke-width="2.5"/>
+        <line x1="22" y1="0" x2="22" y2="13" stroke="#238636" stroke-width="2.5" stroke-linecap="round"/>
+        <line x1="22" y1="31" x2="22" y2="44" stroke="#238636" stroke-width="2.5" stroke-linecap="round"/>
+        <line x1="0" y1="22" x2="13" y2="22" stroke="#238636" stroke-width="2.5" stroke-linecap="round"/>
+        <line x1="31" y1="22" x2="44" y2="22" stroke="#238636" stroke-width="2.5" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="map-controls-top">
+      <button class="map-btn" id="btnMapFullscreen" title="На весь екран" aria-label="На весь екран">⛶</button>
+      <button class="map-btn" id="btnMapLayer" title="Змінити шар карти" aria-label="Змінити шар карти">🛰</button>
+      <button class="map-btn" id="btnDepthToggle" title="Показати глибини" aria-label="Показати глибини">🌊</button>
+      <button class="map-btn" id="btnMapLocate" title="Моє місце" aria-label="Моє місце">📍</button>
+    </div>
+    <div class="map-controls-bottom">
+      <div class="map-coord-display" id="mapCoordDisplay">—</div>
+      <button class="btn" id="btnMapConfirm">✅ Обрати цю точку</button>
+      <button class="btn secondary" id="btnMapCancel">Скасувати</button>
+    </div>
+  </section>
+
+</main>
+
+<script>
+"use strict";
+
+// ============================================================
+// КОНСТАНТИ
+// ============================================================
+const HPA_TO_MMHG = 0.750062;
+const KMH_TO_MS = 3.6;
+const SECONDS_PER_DAY = 86400;
+const HOURS_PER_DAY = 24;
+const PAST_DAYS = 7;
+const FORECAST_DAYS = 11;
+const WATER_TEMP_LAG_FACTOR = 0.82;
+const NORM_PRESSURE_SEA_LEVEL = 760.0;
+const NORM_PRESSURE_GRADIENT_M = 11.0;
+
+const PRESSURE_SMOOTH_FALL_MIN = -2.5;
+const PRESSURE_SMOOTH_FALL_MAX = -0.5;
+const PRESSURE_STABLE_LIMIT = 1.0;
+const PRESSURE_MODERATE_RISE = 3.0;
+const PRESSURE_MODERATE_FALL = -5.0;
+const PRESSURE_STABLE_HIGH_MARGIN = 5.0;
+const PRESSURE_STABLE_HIGH_DRIFT = 1.0;
+const PRESSURE_STABLE_HIGH_DAYS = 3;
+
+const PRECIP_LIGHT_MIN = 0.5;
+const PRECIP_HEAVY = 5.0;
+const WIND_WARM_THRESHOLD = 2.0;
+const WIND_COLD_THRESHOLD = 4.0;
+const WIND_STILL_THRESHOLD = 1.0;
+const WIND_STRONG_FOR_CRUCIAN = 5.0;
+
+const BASE_SCORE_CARP = 50, BASE_SCORE_CRUCIAN = 45;
+const BASE_SCORE_AMUR = 40, BASE_SCORE_TOLSTOLOB = 35;
+const CARP_COMFY_MIN = 20, CARP_COMFY_MAX = 25, CARP_COOL_MIN = 15;
+const CRUCIAN_COMFY_MIN = 18, CRUCIAN_COMFY_MAX = 24, CRUCIAN_COOL_MIN = 12;
+const AMUR_COMFY_MIN = 22, AMUR_COOL_MIN = 18;
+const TOLSTOLOB_COMFY_MIN = 22, TOLSTOLOB_COMFY_MAX = 28, TOLSTOLOB_COOL_MIN = 18;
+
+const PIKE_COMFY_MIN = 8, PIKE_COMFY_MAX = 15, PIKE_OKAY_MIN = 4, PIKE_OKAY_MAX = 20;
+const PIKE_HOT_PENALTY = -25, PIKE_COLD_PENALTY = -5;
+const PERCH_COMFY_MIN = 12, PERCH_COMFY_MAX = 20, PERCH_OKAY_MIN = 8, PERCH_OKAY_MAX = 24;
+const PERCH_HOT_PENALTY = -15, PERCH_COLD_PENALTY = -20;
+const ZANDER_COMFY_MIN = 15, ZANDER_COMFY_MAX = 22, ZANDER_OKAY_MIN = 10, ZANDER_OKAY_MAX = 25;
+const ZANDER_HOT_PENALTY = -15, ZANDER_COLD_PENALTY = -25;
+
+const PREDATOR_CHOP_MIN = 2, PREDATOR_CHOP_MAX = 5;
+const PREDATOR_CALM_THRESHOLD = 1, PREDATOR_STRONG_WIND = 7;
+const CLOUD_OVERCAST_THRESHOLD = 50, CLOUD_BRIGHT_THRESHOLD = 30;
+
+const TOD_MORNING_START = 5, TOD_DAY_START = 10;
+const TOD_EVENING_START = 17, TOD_NIGHT_START = 22;
+
+const WARM_WINDS = new Set(["Південний","Західний","Південно-Західний","Південно-Східний"]);
+const COLD_WINDS = new Set(["Північний","Східний","Північно-Східний","Північно-Західний"]);
+
+const ACTIVITY_FORECAST_DAYS = 11;
+const DAYLIGHT_START_HOUR = 5;
+const DAYLIGHT_END_HOUR = 22;
+
+const NEW_MOON_BASE_MS = Date.UTC(2000, 0, 6, 18, 14, 0);
+const LUNAR_CYCLE_DAYS = 29.5305882;
+
+const OVERPASS_MIRRORS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter"
+];
+const WATER_CACHE_KEY = "carp_water_body_v1";
+const WATER_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+// ============================================================
+// УТИЛІТИ
+// ============================================================
+const pad2 = n => String(n).padStart(2, "0");
+const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+function clampScore(s, max=100) { return clamp(Math.floor(s), 0, max); }
+function safeVal(arr, i, def=0) {
+  if (!arr || i < 0 || i >= arr.length) return def;
+  const v = arr[i];
+  return v == null ? def : v;
+}
+function formatDayOnly(isoStr) {
+  if (!isoStr || isoStr.length < 10) return isoStr;
+  const [y, m, d] = isoStr.slice(0, 10).split("-");
+  return `${d}.${m}`;
+}
+function locationNow(tzOffsetSec) {
+  return new Date(Date.now() + (tzOffsetSec || 0) * 1000);
+}
+function isoDateOnly(locDate) {
+  return `${locDate.getUTCFullYear()}-${pad2(locDate.getUTCMonth()+1)}-${pad2(locDate.getUTCDate())}`;
+}
+function isoHour(locDate) {
+  return `${isoDateOnly(locDate)}T${pad2(locDate.getUTCHours())}:00`;
+}
+function addDaysToIsoDate(isoDate, n) {
+  const d = new Date(isoDate + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
+  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth()+1)}-${pad2(d.getUTCDate())}`;
+}
+function dayStartLocal(d) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
+function addDaysLocal(d, n) { const x = new Date(d); x.setDate(x.getDate()+n); return x; }
+function calculateNormPressure(elev) {
+  return Math.round((NORM_PRESSURE_SEA_LEVEL - elev/NORM_PRESSURE_GRADIENT_M)*10)/10;
+}
+
+// ============================================================
+// ГЕОМЕТРІЯ
+// ============================================================
+function pointInPolygon(lat, lon, poly) {
+  let inside = false;
+  const n = poly.length;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const yi = poly[i][0], xi = poly[i][1];
+    const yj = poly[j][0], xj = poly[j][1];
+    const intersect = ((yi > lat) !== (yj > lat)) &&
+                      (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+function polygonCentroid(poly) {
+  let latSum = 0, lonSum = 0;
+  for (const p of poly) { latSum += p[0]; lonSum += p[1]; }
+  return [latSum / poly.length, lonSum / poly.length];
+}
+function distanceM(p1, p2) {
+  const R = 6371000;
+  const dLat = (p2[0] - p1[0]) * Math.PI / 180;
+  const dLon = (p2[1] - p1[1]) * Math.PI / 180;
+  const lat1 = p1[0] * Math.PI / 180;
+  const lat2 = p2[0] * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+function bearingDeg(from, to) {
+  const lat1 = from[0] * Math.PI/180;
+  const lat2 = to[0] * Math.PI/180;
+  const dLon = (to[1] - from[1]) * Math.PI/180;
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+  let brng = Math.atan2(y, x) * 180/Math.PI;
+  return (brng + 360) % 360;
+}
+function polygonAreaM2(poly) {
+  const R = 6371000;
+  let area = 0;
+  const n = poly.length;
+  for (let i = 0; i < n; i++) {
+    const [lat1, lon1] = poly[i];
+    const [lat2, lon2] = poly[(i + 1) % n];
+    area += (lon2 - lon1) * Math.PI/180 *
+            (2 + Math.sin(lat1*Math.PI/180) + Math.sin(lat2*Math.PI/180));
+  }
+  return Math.abs(area) * R * R / 2;
+}
+function polygonPerimeterM(poly) {
+  let len = 0;
+  const n = poly.length;
+  for (let i = 0; i < n; i++) {
+    len += distanceM(poly[i], poly[(i + 1) % n]);
+  }
+  return len;
+}
+function polygonShape(poly) {
+  const lat0 = poly[0][0];
+  const cosLat = Math.cos(lat0 * Math.PI / 180);
+  const M_PER_DEG_LAT = 111320;
+  const M_PER_DEG_LON = 111320 * cosLat;
+  const xs = poly.map(p => (p[1] - poly[0][1]) * M_PER_DEG_LON);
+  const ys = poly.map(p => (p[0] - poly[0][0]) * M_PER_DEG_LAT);
+  const meanX = xs.reduce((a,b)=>a+b,0) / xs.length;
+  const meanY = ys.reduce((a,b)=>a+b,0) / ys.length;
+  let sxx = 0, syy = 0, sxy = 0;
+  for (let i = 0; i < xs.length; i++) {
+    const dx = xs[i] - meanX, dy = ys[i] - meanY;
+    sxx += dx*dx; syy += dy*dy; sxy += dx*dy;
+  }
+  sxx /= xs.length; syy /= xs.length; sxy /= xs.length;
+  const tr = sxx + syy;
+  const det = sxx*syy - sxy*sxy;
+  const disc = Math.sqrt(Math.max(0, tr*tr/4 - det));
+  const l1 = tr/2 + disc;
+  const l2 = Math.max(0.0001, tr/2 - disc);
+  const elongation = Math.sqrt(l1 / l2);
+  const angle = 0.5 * Math.atan2(2*sxy, sxx - syy) * 180 / Math.PI;
+  const compass = (90 - angle + 360) % 360;
+  return { elongation, orientation: compass };
+}
+function shorelineWindFactor(areaHa) {
+  if (areaHa < 0.1) return 0.15;
+  if (areaHa < 1)   return 0.4;
+  if (areaHa < 10)  return 0.7;
+  if (areaHa < 100) return 1.0;
+  if (areaHa < 1000) return 1.2;
+  return 1.4;
+}
+
+// ============================================================
+// МІСЯЦЬ
+// ============================================================
+function getMoonPhase(date) {
+  const diffMs = date.getTime() - NEW_MOON_BASE_MS;
+  const days = diffMs/1000/SECONDS_PER_DAY;
+  let phase = (days % LUNAR_CYCLE_DAYS) / LUNAR_CYCLE_DAYS;
+  if (phase < 0) phase += 1;
+  if (phase < 0.0625 || phase >= 0.9375) return {name:"🌑 Молодик", icon:"🌑", carp:5, amur:5, crucian:5, tolstolob:5};
+  if (phase < 0.1875) return {name:"🌒 Молодик (зростаючий)", icon:"🌒", carp:3, amur:3, crucian:3, tolstolob:3};
+  if (phase < 0.3125) return {name:"🌓 Перша чверть", icon:"🌓", carp:0, amur:0, crucian:0, tolstolob:0};
+  if (phase < 0.4375) return {name:"🌔 Зростаючий місяць", icon:"🌔", carp:0, amur:0, crucian:0, tolstolob:0};
+  if (phase < 0.5625) return {name:"🌕 Повний місяць", icon:"🌕", carp:-5, amur:-5, crucian:0, tolstolob:-5};
+  if (phase < 0.6875) return {name:"🌖 Спадаючий місяць", icon:"🌖", carp:3, amur:3, crucian:5, tolstolob:3};
+  if (phase < 0.8125) return {name:"🌗 Остання чверть", icon:"🌗", carp:3, amur:3, crucian:5, tolstolob:3};
+  return {name:"🌘 Спадаючий місяць", icon:"🌘", carp:3, amur:3, crucian:5, tolstolob:3};
+}
+
+// ============================================================
+// ТИСК
+// ============================================================
+function isPressureStableHigh(pHistory, idx, norm) {
+  if (idx < PRESSURE_STABLE_HIGH_DAYS * HOURS_PER_DAY) return false;
+  for (let d = 0; d < PRESSURE_STABLE_HIGH_DAYS; d++) {
+    const i = idx - d*HOURS_PER_DAY;
+    const p = safeVal(pHistory, i) * HPA_TO_MMHG;
+    if (p <= norm + PRESSURE_STABLE_HIGH_MARGIN) return false;
+    if (i >= HOURS_PER_DAY) {
+      const prev = safeVal(pHistory, i-HOURS_PER_DAY) * HPA_TO_MMHG;
+      if (Math.abs(p - prev) >= PRESSURE_STABLE_HIGH_DRIFT) return false;
+    }
+  }
+  return true;
+}
+function classifyPressure(pNow, delta, norm, pHistory, idx) {
+  if (isPressureStableHigh(pHistory, idx, norm)) {
+    return {enum:"STABLE_HIGH", label:"ВИСОКИЙ СТАБІЛЬНИЙ ТИСК (АДАПТАЦІЯ) 🌟",
+      desc:`Тиск стабільно високий (${pNow.toFixed(1)} мм) протягом останніх ${PRESSURE_STABLE_HIGH_DAYS} днів. Риба адаптувалась, активність відновлюється.`};
+  }
+  if (delta >= PRESSURE_MODERATE_RISE) return {enum:"SHARP_RISE", label:"РІЗКЕ ЗРОСТАННЯ ТИСКУ ⚠️", desc:"Різке зростання тиску. Риба пригнічена, клювання вкрай слабке."};
+  if (delta >= PRESSURE_STABLE_LIMIT) return {enum:"MODERATE_RISE", label:"ПОМІРНЕ ЗРОСТАННЯ ТИСКУ 📈", desc:"Тиск поступово зростає. Риба стає обережнішою."};
+  if (delta > PRESSURE_SMOOTH_FALL_MAX) return {enum:"STABLE", label:"СТАБІЛЬНИЙ ТИСК 🌟", desc:"Міхур риби в балансі. Нормальні робочі умови для водойми."};
+  if (delta >= PRESSURE_SMOOTH_FALL_MIN) return {enum:"SMOOTH_FALL", label:"ПЛАВНЕ ПАДІННЯ (ІДЕАЛЬНО) 📉", desc:"Тиск повільно падає перед зміною погоди. Риба активно харчується."};
+  if (delta >= PRESSURE_MODERATE_FALL) return {enum:"MODERATE_FALL", label:"ПОМІРНЕ ПАДІННЯ ТИСКУ 🌧️", desc:"Тиск падає помірно. Риба активізується, але не на повну силу."};
+  return {enum:"SHARP_FALL", label:"РІЗКЕ ПАДІННЯ ТИСКУ ⚠️🌪️", desc:"Різкий злам погоди/шторм. Риба в шоці і залягає на дно. Кльов мінімальний."};
+}
+
+// ============================================================
+// ВІТЕР
+// ============================================================
+function getSurfZone(degs) {
+  if (degs == null || isNaN(degs)) return {from:"Невідомий", bank:"Невідомий"};
+  if (degs >= 337.5 || degs < 22.5)   return {from:"Північний (↓)",          bank:"ПІВДЕННИЙ БЕРЕГ"};
+  if (degs < 67.5)                     return {from:"Північно-Східний (↙)",  bank:"ПІВДЕННО-ЗАХІДНИЙ БЕРЕГ"};
+  if (degs < 112.5)                    return {from:"Східний (←)",            bank:"ЗАХІДНИЙ БЕРЕГ"};
+  if (degs < 157.5)                    return {from:"Південно-Східний (↖)",  bank:"ПІВНІЧНО-ЗАХІДНИЙ БЕРЕГ"};
+  if (degs < 202.5)                    return {from:"Південний (↑)",          bank:"ПІВНІЧНИЙ БЕРЕГ"};
+  if (degs < 247.5)                    return {from:"Південно-Західний (↗)", bank:"ПІВНІЧНО-СХІДНИЙ БЕРЕГ"};
+  if (degs < 292.5)                    return {from:"Західний (→)",           bank:"СХІДНИЙ БЕРЕГ"};
+  return {from:"Північно-Західний (↘)", bank:"ПІВДЕННО-СХІДНИЙ БЕРЕГ"};
+}
+function windCategory(from) {
+  const base = from.split(" (")[0];
+  if (WARM_WINDS.has(base)) return "warm";
+  if (COLD_WINDS.has(base)) return "cold";
+  return "neutral";
+}
+function precipCategory(v) {
+  if (v >= PRECIP_HEAVY) return "heavy";
+  if (v >= PRECIP_LIGHT_MIN) return "light";
+  return "none";
+}
+
+// ============================================================
+// БАЛИ
+// ============================================================
+function scoreCarp(trend, wTemp, wSpeed, wFrom, precip, m, wf) {
+  wf = wf == null ? 1.0 : wf;
+  let s = BASE_SCORE_CARP;
+  if (wTemp >= CARP_COMFY_MIN && wTemp <= CARP_COMFY_MAX) s += 15;
+  else if (wTemp >= CARP_COOL_MIN && wTemp < CARP_COMFY_MIN) s += 5;
+  else if (wTemp > CARP_COMFY_MAX) s -= 15;
+  else s -= 25;
+  if (trend === "SMOOTH_FALL") s += 20;
+  else if (trend === "SHARP_FALL" || trend === "SHARP_RISE") s -= 30;
+  else if (trend === "STABLE_HIGH") s += 10;
+  const wc = windCategory(wFrom);
+  if (wSpeed > WIND_WARM_THRESHOLD && wc === "warm") s += Math.round(10 * wf);
+  else if (wSpeed > WIND_COLD_THRESHOLD && wc === "cold") s -= Math.round(15 * wf);
+  if (precip === "light") s += 10;
+  else if (precip === "heavy") s -= 20;
+  return clampScore(s + m);
+}
+function scoreCrucian(trend, wTemp, wSpeed, wFrom, precip, m, wf) {
+  wf = wf == null ? 1.0 : wf;
+  let s = BASE_SCORE_CRUCIAN;
+  if (wTemp >= CRUCIAN_COMFY_MIN && wTemp <= CRUCIAN_COMFY_MAX) s += 20;
+  else if (wTemp >= CRUCIAN_COOL_MIN && wTemp < CRUCIAN_COMFY_MIN) s += 5;
+  else if (wTemp > CRUCIAN_COMFY_MAX) s -= 10;
+  else s -= 25;
+  if (trend === "SMOOTH_FALL") s += 15;
+  else if (trend === "SHARP_FALL" || trend === "SHARP_RISE") s -= 25;
+  if (precip === "light") s += 15;
+  else if (precip === "heavy") s -= 15;
+  return clampScore(s + m);
+}
+function scoreAmur(trend, wTemp, m) {
+  let s = BASE_SCORE_AMUR;
+  if (wTemp >= AMUR_COMFY_MIN) s += 25;
+  else if (wTemp >= AMUR_COOL_MIN && wTemp < AMUR_COMFY_MIN) s += 10;
+  else s -= 30;
+  if (trend === "SHARP_FALL" || trend === "SHARP_RISE") s -= 25;
+  return clampScore(s + m);
+}
+function scoreTolstolob(trend, wTemp, m) {
+  let s = BASE_SCORE_TOLSTOLOB;
+  if (wTemp >= TOLSTOLOB_COMFY_MIN && wTemp <= TOLSTOLOB_COMFY_MAX) s += 30;
+  else if (wTemp >= TOLSTOLOB_COOL_MIN && wTemp < TOLSTOLOB_COMFY_MIN) s += 10;
+  else if (wTemp > TOLSTOLOB_COMFY_MAX) s -= 15;
+  else s -= 30;
+  if (trend === "SMOOTH_FALL") s += 10;
+  else if (trend === "SHARP_FALL" || trend === "SHARP_RISE") s -= 20;
+  return clampScore(s + m);
+}
+function tempDeltaPredator(t, cmin, cmax, omin, omax, hotP, coldP) {
+  if (t >= cmin && t <= cmax) return 25;
+  if (t > cmax) return hotP;
+  if ((t >= omin && t < cmin) || (t > cmax && t <= omax)) return 10;
+  return coldP;
+}
+const PIKE_LIGHT = {twilight:25, dark:15, moonlit:10, overcast:10, bright:-10};
+const PERCH_LIGHT = {twilight:25, overcast:20, moonlit:5, dark:5, bright:-10};
+const ZANDER_LIGHT = {twilight:30, dark:20, moonlit:-10, overcast:10, bright:-20};
+function windDeltaPredator(ms, wf) {
+  wf = wf == null ? 1.0 : wf;
+  if (ms >= PREDATOR_CHOP_MIN && ms <= PREDATOR_CHOP_MAX) return Math.round(10 * wf);
+  if (ms < PREDATOR_CALM_THRESHOLD) return Math.round(-5 * wf);
+  if (ms > PREDATOR_STRONG_WIND) return Math.round(-10 * wf);
+  return 0;
+}
+function precipDeltaPredator(p) {
+  if (p === "light") return 5;
+  if (p === "heavy") return -20;
+  return 0;
+}
+function pressureDeltaPredator(t) {
+  if (t === "SMOOTH_FALL") return 15;
+  if (t === "SHARP_FALL" || t === "SHARP_RISE") return -10;
+  return 0;
+}
+function scorePike(trend, wTemp, wMs, precip, light, wf) {
+  let s = 50;
+  s += tempDeltaPredator(wTemp, PIKE_COMFY_MIN, PIKE_COMFY_MAX, PIKE_OKAY_MIN, PIKE_OKAY_MAX, PIKE_HOT_PENALTY, PIKE_COLD_PENALTY);
+  s += pressureDeltaPredator(trend) + PIKE_LIGHT[light] + windDeltaPredator(wMs, wf) + precipDeltaPredator(precip);
+  return clampScore(s);
+}
+function scorePerch(trend, wTemp, wMs, precip, light, wf) {
+  let s = 50;
+  s += tempDeltaPredator(wTemp, PERCH_COMFY_MIN, PERCH_COMFY_MAX, PERCH_OKAY_MIN, PERCH_OKAY_MAX, PERCH_HOT_PENALTY, PERCH_COLD_PENALTY);
+  s += pressureDeltaPredator(trend) + PERCH_LIGHT[light] + windDeltaPredator(wMs, wf) + precipDeltaPredator(precip);
+  return clampScore(s);
+}
+function scoreZander(trend, wTemp, wMs, precip, light, wf) {
+  let s = 50;
+  s += tempDeltaPredator(wTemp, ZANDER_COMFY_MIN, ZANDER_COMFY_MAX, ZANDER_OKAY_MIN, ZANDER_OKAY_MAX, ZANDER_HOT_PENALTY, ZANDER_COLD_PENALTY);
+  s += pressureDeltaPredator(trend) + ZANDER_LIGHT[light] + windDeltaPredator(wMs, wf) + precipDeltaPredator(precip);
+  return clampScore(s);
+}
+
+// ============================================================
+// ЧАС ДОБИ / ОСВІТЛЕННЯ
+// ============================================================
+function timeOfDay(h) {
+  if (h >= TOD_MORNING_START && h < TOD_DAY_START) return "morning";
+  if (h >= TOD_DAY_START && h < TOD_EVENING_START) return "day";
+  if (h >= TOD_EVENING_START && h < TOD_NIGHT_START) return "evening";
+  return "night";
+}
+function lightCondition(tod, cloud, moonName) {
+  if (tod === "morning" || tod === "evening") return "twilight";
+  if (tod === "day") return cloud >= CLOUD_OVERCAST_THRESHOLD ? "overcast" : "bright";
+  return moonName.includes("Повний") ? "moonlit" : "dark";
+}
+function lightLabel(l) {
+  return {twilight:"🌅 Сутінки (ідеально для хижаків!)",
+          overcast:"☁️ Хмарно — добре для полювання",
+          bright:"☀️ Яскраво — хижак обережний",
+          dark:"🌑 Темна ніч — судак/щука активні",
+          moonlit:"🌕 Місячна ніч — помірно"}[l];
+}
+function todLabel(t) {
+  return {morning:"🌅 Ранок", day:"☀️ День", evening:"🌆 Вечір", night:"🌙 Ніч"}[t];
+}
+
+// ============================================================
+// МІТКИ
+// ============================================================
+function carpLabel(s) {
+  if (s <= 35) return {t:"ПАСИВНИЙ / СЛАБКИЙ КЛЬОВ 🛑", c:"red"};
+  if (s <= 60) return {t:"НОРМА / ОДИНИЧНІ ПОКЛЬОВКИ 🟡", c:"yellow"};
+  if (s <= 80) return {t:"ВИСОКА АКТИВНІСТЬ 🟢", c:"green"};
+  return {t:"ЖОР / МАКСИМАЛЬНА АКТИВНІСТЬ 🔥", c:"orange"};
+}
+function crucianLabel(s) {
+  if (s <= 35) return {t:"ПАСИВНИЙ / СЛАБКИЙ КЛЬОВ 🛑", c:"red"};
+  if (s <= 60) return {t:"НОРМАЛЬНА АКТИВНІСТЬ 🟡", c:"yellow"};
+  if (s <= 80) return {t:"ВИСОКА АКТИВНІСТЬ 🟢", c:"green"};
+  return {t:"ЖОР / МАКСИМАЛЬНА АКТИВНІСТЬ 🔥", c:"orange"};
+}
+function amurLabel(s) {
+  if (s <= 35) return {t:"ПАСИВНИЙ / СТОЇТЬ НА ЯМАХ 💤", c:"red"};
+  if (s <= 60) return {t:"СЕРЕДНЯ АКТИВНІСТЬ 🌾", c:"yellow"};
+  if (s <= 80) return {t:"ВИСОКА АКТИВНІСТЬ 🟢", c:"green"};
+  return {t:"ЕКСТРЕМАЛЬНИЙ ЖОР АМУРА 🔥", c:"orange"};
+}
+function tolstolobLabel(s) {
+  if (s <= 35) return {t:"ПАСИВНИЙ / СТОЇТЬ НА ГЛИБИНІ 💤", c:"red"};
+  if (s <= 60) return {t:"СЕРЕДНЯ АКТИВНІСТЬ 🌿", c:"yellow"};
+  if (s <= 80) return {t:"ВИСОКА АКТИВНІСТЬ 🟢", c:"green"};
+  return {t:"ЖОР / МАКСИМАЛЬНА АКТИВНІСТЬ 🔥", c:"orange"};
+}
+function predatorLabel(s) {
+  if (s <= 35) return {t:"ПАСИВНИЙ 🛑", c:"red"};
+  if (s <= 60) return {t:"СЛАБКИЙ КЛЬОВ 🟡", c:"yellow"};
+  if (s <= 80) return {t:"АКТИВНИЙ КЛЬОВ 🟢", c:"green"};
+  return {t:"ЖОР 🔥", c:"orange"};
+}
+
+// ============================================================
+// ПОРАДИ
+// ============================================================
+function pressureAdvice(trend, fish, adv) {
+  if (trend === "SMOOTH_FALL") {
+    if (fish === "carp") { adv.tactics += "\n• Активне годування! Збільште порцію прикормки, великі насадки."; adv.gear += "\n• Гострі гачки для активної риби."; }
+    else if (fish === "amur") { adv.tactics += "\n• Падіння тиску активізує амура – виходить на мілководдя."; adv.groundbait += "\n• Більше зернової прикормки (горох, кукурудза)."; }
+    else if (fish === "tolstolob") { adv.tactics += "\n• Падіння тиску активізує товстолоба — піднімається до поверхні за планктоном."; adv.bait += "\n• Технопланктон і дрібні частки найкращі."; }
+    else { adv.groundbait += "\n• Тиск падає – карась активізується. Більші насадки."; adv.bait += "\n• Об'ємні насадки з яскравим запахом."; }
+  } else if (trend === "SHARP_FALL" || trend === "SHARP_RISE") {
+    if (fish === "carp") { adv.tactics += "\n• Риба пригнічена – малі порції, дрібні насадки (6-8 мм)."; adv.spot += "\n• Глибокі ями або зони з уповільненою течією."; }
+    else if (fish === "amur") { adv.tactics += "\n• Амур пасивний. Дрібні порції біля дна."; adv.spot += "\n• Ділянки з водною рослинністю."; }
+    else if (fish === "tolstolob") { adv.tactics += "\n• Товстолоб пригнічений. Дрібні порції біля дна."; adv.spot += "\n• Глибші ділянки (3-5 м)."; }
+    else { adv.groundbait += "\n• Карась пригнічений. Дуже малі порції."; adv.spot += "\n• Глибші місця (3-4 м) або мулисте дно."; adv.bait += "\n• Найкраще працює мотиль."; }
+  } else if (trend === "STABLE_HIGH") {
+    if (fish === "carp") adv.tactics += "\n• Високий стабільний тиск – риба адаптувалась. Не перегодовуйте.";
+    else if (fish === "amur") adv.tactics += "\n• Амур активний, рослинні насадки.";
+    else if (fish === "tolstolob") adv.tactics += "\n• Товстолоб менш активний, дрібні порції біля поверхні.";
+    else adv.groundbait += "\n• Риба адаптувалась. Не перегодовуйте.";
+  }
+  return adv;
+}
+function windAdvice(adv, wSpeed, wFrom, surfBank, fish) {
+  const knownBank = surfBank && surfBank !== "Невідомий";
+  if (wSpeed > WIND_WARM_THRESHOLD && knownBank) {
+    if (fish === "crucian") adv.spot += `\n• Вітер з ${wFrom} – шукайте ${surfBank}.`;
+    else if (fish === "amur") adv.spot += `\n• Вітер з ${wFrom} – шукайте ${surfBank}.`;
+    else if (fish === "tolstolob") adv.spot += `\n• Вітер з ${wFrom} – шукайте ${surfBank}.`;
+    else adv.spot += `\n• Вітер з ${wFrom}, акцент – на ${surfBank}.`;
+  } else if (wSpeed < WIND_STILL_THRESHOLD) {
+    if (fish === "crucian") adv.spot += "\n• Штиль – донка з повільною проводкою.";
+    else if (fish === "amur") adv.spot += "\n• Штиль – рослинні насадки, що повільно опускаються.";
+    else if (fish === "tolstolob") adv.spot += "\n• Штиль – технопланктон, що повільно опускається.";
+    else adv.spot += "\n• Штиль – Zig-Rig, або перенесіть на ніч/світанок.";
+  } else if (fish === "crucian" && wSpeed > WIND_STRONG_FOR_CRUCIAN) {
+    adv.spot += "\n• Сильний вітер – карась на глибині, шукайте захищені ділянки.";
+  }
+  return adv;
+}
+function precipCloudAdvice(adv, precip, cloud, fish) {
+  const p = precipCategory(precip);
+  if (p === "light") {
+    if (fish === "carp") { adv.tactics += "\n• Дощ активізує рибу – тваринні компоненти."; adv.spot += "\n• Риба виходить на мілководдя."; }
+    else if (fish === "amur") { adv.tactics += "\n• Легкий дощ – амур на мілководді."; adv.spot += "\n• Ділянки з ряскою."; }
+    else if (fish === "tolstolob") { adv.tactics += "\n• Товстолоб активніше годується."; adv.spot += "\n• Ділянки біля струмків."; }
+    else { adv.groundbait += "\n• Дрібний дощ – додайте опариша."; adv.spot += "\n• Карась на мілководді."; }
+  } else if (p === "heavy") {
+    if (fish === "carp") { adv.tactics += "\n• Сильний дощ – мінімум прикормки."; adv.spot += "\n• Глибші ділянки."; }
+    else if (fish === "amur") { adv.spot += "\n• Амур на глибині 2–4 м."; adv.bait += "\n• Прикормка з великими частками."; }
+    else if (fish === "tolstolob") { adv.spot += "\n• Товстолоб на глибині 3–5 м."; adv.bait += "\n• Прикормка, що повільно розпадається."; }
+    else { adv.groundbait += "\n• Мінімум прикормки."; adv.spot += "\n• Глибші ділянки або укриття (корчі, очерет)."; }
+  }
+  if (cloud < 30) {
+    adv.spot += "\n• Ясна погода – риба обережна; біля очерету, дерев, на глибині.";
+    if (fish === "crucian") adv.bait += "\n• Натуральні насадки без різких запахів.";
+    else if (fish === "amur") adv.spot += "\n• Амур глибше (2–4 м).";
+    else if (fish === "tolstolob") adv.spot += "\n• Товстолоб глибше (3–5 м).";
+  } else if (cloud > 70) {
+    adv.spot += "\n• Хмарно – риба сміливіше до берега.";
+    if (fish === "crucian") adv.bait += "\n• Можна додати ароматизаторів.";
+    else if (fish === "amur") adv.spot += "\n• Амур біля поверхні.";
+    else if (fish === "tolstolob") adv.spot += "\n• Товстолоб біля поверхні.";
+  }
+  return adv;
+}
+function buildPeacefulAdvice(fish, snap, trend) {
+  const base = {
+    carp: {spot:"• Бровки, виходи з ям, русловий стіл.", tactics:"• Підгодовування, перезакід раз на 1–2 год.", gear:"• Classic короповий або флет-фідерний монтаж.", groundbait:"• Поживна суміш середньої фракції (пеллетс, конопля, зернові).", bait:"• Бойли 12–14 мм, кукурудза з опаришем, тигровий горіх."},
+    crucian: {spot:"• Межі очерету, вікна серед латаття, мілководні затоки (1–2 м).", tactics:"• Порційне догодовування невеликими кульками.", gear:"• Легкий фідер (пікер) або поплавцева вудка.", groundbait:"• Дрібнофракційна прикормка з солодким ароматом.", bait:"• Опариш, гнійний черв'як, перловка, мастирка, пуфіки."},
+    amur: {spot:"• Ділянки з водною рослинністю, мілководні затоки (1.5–2.5 м).", tactics:"• Прикормка рослинного походження.", gear:"• Фідер або матчева вудка з тонким повідцем.", groundbait:"• Зернові суміші, горох, кукурудза, конопля.", bait:"• Молода кукурудза, горох, перловка, макуха."},
+    tolstolob: {spot:"• Відкриті плеса, зони з планктоном, глибина 2–4 м.", tactics:"• Прикормка з дрібними частинками.", gear:"• Фідер або поплавцева вудка з дрібними гачками.", groundbait:"• Дрібнофракційна прикормка, технопланктон, сухе молоко.", bait:"• Технопланктон, перловка, мотиль, опариш."}
+  }[fish];
+  let adv = {...base};
+  adv = pressureAdvice(trend, fish, adv);
+  adv = windAdvice(adv, snap.windSpeedMs, snap.windFrom, snap.surfBank, fish);
+  adv = precipCloudAdvice(adv, snap.precipNow, snap.cloudNow, fish);
+  return adv;
+}
+function windAdvicePredator(adv, wSpeed, wFrom, surfBank, fish) {
+  const knownBank = surfBank && surfBank !== "Невідомий";
+  if (wSpeed > PREDATOR_CHOP_MAX && knownBank) {
+    adv.spot += `\n• Сильний вітер (${wSpeed.toFixed(1)} м/с) з ${wFrom} — хижак тримається підвітряного берега.`;
+  } else if (wSpeed >= PREDATOR_CHOP_MIN && knownBank) {
+    adv.spot += `\n• Помірний вітер з ${wFrom} створює «ряб» — активізує хижака. Шукайте ${surfBank.toLowerCase()}.`;
+  } else if (wSpeed < PREDATOR_CALM_THRESHOLD) {
+    if (fish === "pike") adv.tactics += "\n• Штиль — щука обережна, довгі паузи.";
+    else if (fish === "perch") adv.tactics += "\n• Штиль — дрібні повільні приманки.";
+    else adv.tactics += "\n• Штиль — судак глибоко, важчий джиг.";
+  }
+  return adv;
+}
+function buildPredatorAdvice(fish, snap, trend, light) {
+  const base = {
+    pike: {spot:"• Межі очерету, корчі, затони на мілководді (1–2 м).", gear:"• Спінінг 2.4–2.7 м, тест 10–30 г, шнур 0.10–0.13 мм.", bait:"• Коливальні блешні, джеркбейти, силікон 10–15 см.", tactics:"• Повільна рівномірна проводка з паузами 2–3 с."},
+    perch: {spot:"• Піщані косі, підводні горби, глибина 2–4 м, корчі.", gear:"• Ультралайт спінінг 1.8–2.1 м, тест 1–7 г.", bait:"• Мікроджиг (1–3 г), твістер 1–2 дюйми.", tactics:"• Дрібні підкидання з паузою."},
+    zander: {spot:"• Ями, бровки, русло, глибина 4–8 м.", gear:"• Спінінг 2.4–2.7 м, тест 5–25 г, шнур 0.08–0.10 мм.", bait:"• Джиг 10–24 г + твістер/віброхвіст 2–3 дюйми, поролонка.", tactics:"• Ступінчаста проводка: 2–3 оберти + пауза 3–5 с."}
+  }[fish];
+  let adv = {...base};
+  if (fish === "pike") {
+    if (light === "bright") adv.spot += "\n• Яскраво — тінь дерев, глибина 2–3 м.";
+    else if (["twilight","dark","moonlit"].includes(light)) adv.spot += "\n• Сутінки/ніч — щука на мілководді.";
+  } else if (fish === "perch") {
+    if (light === "twilight" || light === "overcast") adv.spot += "\n• Сутінки/хмарно — окунь ближче до берега.";
+    else if (light === "bright") adv.spot += "\n• Яскраво — окунь у глибині або в тіні.";
+  } else {
+    if (light === "twilight") adv.spot += "\n• Сутінки — судак на 2–4 м.";
+    else if (light === "dark") adv.spot += "\n• Темна ніч — судак у верхніх шарах (2–5 м).";
+    else if (light === "moonlit") adv.spot += "\n• Повний місяць — судак глибше.";
+    else if (light === "bright") adv.spot += "\n• Яскравий день — тіньові ділянки.";
+  }
+  if (trend === "SMOOTH_FALL") {
+    if (fish === "pike") adv.tactics += "\n• Падіння тиску — агресивні приманки.";
+    else if (fish === "perch") adv.tactics += "\n• Падіння тиску — окунь зграйкою.";
+    else adv.tactics += "\n• Падіння тиску — найкращий час! Збільшіть темп проводки.";
+  } else if (trend === "SHARP_FALL" || trend === "SHARP_RISE") {
+    if (fish === "pike") adv.tactics += "\n• Нестабільний тиск — зменшіть розмір приманки.";
+  } else if (trend === "STABLE_HIGH" && fish === "zander") {
+    adv.tactics += "\n• Високий тиск — судак глибоко, важчі джиги.";
+  }
+  const p = precipCategory(snap.precipNow);
+  if (p === "heavy") {
+    if (fish === "pike") adv.bait += "\n• Після зливи — кислотні кольори.";
+    else if (fish === "zander") adv.bait += "\n• Після зливи — приманки з шумом.";
+  } else if (p === "light" && fish === "perch") {
+    adv.tactics += "\n• Легкий дощ — окунь менш обережний.";
+  }
+  adv = windAdvicePredator(adv, snap.windSpeedMs, snap.windFrom, snap.surfBank, fish);
+  return adv;
+}
+function aromaAdvice(wTemp) {
+  if (wTemp >= 24) return "🌞 Спека: легкі, фруктові аромати (ананас, полуниця, персик).\n• Рідкі ароматизатори на водній основі.";
+  if (wTemp >= 18) return "🌤️ Комфортна температура: універсальні аромати — карамель, ваніль, аніс, часник.";
+  if (wTemp >= 12) return "🌥️ Прохолодна вода: «м'ясні» аромати — креветка, краб, рибний запах.";
+  return "❄️ Холодна вода: мінімум ароматів. Тільки натуральні — черв'як, мотиль, опариш.";
+}
+
+// ============================================================
+// ВОДОЙМА
+// ============================================================
+function _waterCacheGet(lat, lon) {
+  try {
+    const all = JSON.parse(localStorage.getItem(WATER_CACHE_KEY) || "{}");
+    const key = `${lat.toFixed(3)},${lon.toFixed(3)}`;
+    const entry = all[key];
+    if (!entry) return undefined;
+    if (Date.now() - entry.t > WATER_CACHE_TTL_MS) return undefined;
+    return entry.data;
+  } catch { return undefined; }
+}
+function _waterCacheSet(lat, lon, data) {
+  try {
+    const all = JSON.parse(localStorage.getItem(WATER_CACHE_KEY) || "{}");
+    const key = `${lat.toFixed(3)},${lon.toFixed(3)}`;
+    const now = Date.now();
+    for (const k of Object.keys(all)) {
+      if (now - (all[k].t || 0) > WATER_CACHE_TTL_MS) delete all[k];
+    }
+    all[key] = { t: now, data };
+    const keys = Object.keys(all);
+    if (keys.length > 20) {
+      keys.sort((a,b) => (all[a].t||0) - (all[b].t||0));
+      for (let i = 0; i < keys.length - 20; i++) delete all[keys[i]];
+    }
+    localStorage.setItem(WATER_CACHE_KEY, JSON.stringify(all));
+  } catch {}
+}
+function _extractPolygons(data) {
+  const out = [];
+  if (!data || !data.elements) return out;
+  for (const el of data.elements) {
+    if (el.type === "way" && el.geometry && el.geometry.length >= 3) {
+      const coords = el.geometry.map(g => [g.lat, g.lon]);
+      out.push({ coords, tags: el.tags || {}, id: `way/${el.id}` });
+    } else if (el.type === "relation" && el.members) {
+      for (const m of el.members) {
+        if (m.type === "way" && m.role === "outer" && m.geometry && m.geometry.length >= 3) {
+          const coords = m.geometry.map(g => [g.lat, g.lon]);
+          out.push({ coords, tags: el.tags || {}, id: `relation/${el.id}` });
+        }
+      }
+    }
+  }
+  return out;
+}
+async function fetchWaterBody(lat, lon) {
+  const cached = _waterCacheGet(lat, lon);
+  if (cached !== undefined) return cached;
+  const query = `[out:json][timeout:15];
+(
+  way(around:1500,${lat},${lon})["natural"="water"];
+  way(around:1500,${lat},${lon})["waterway"="riverbank"];
+  way(around:1500,${lat},${lon})["landuse"="reservoir"];
+  way(around:1500,${lat},${lon})["landuse"="basin"];
+  relation(around:1500,${lat},${lon})["natural"="water"];
+);
+out geom;`;
+  for (const mirror of OVERPASS_MIRRORS) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
+      const resp = await fetch(mirror, {
+        method: "POST",
+        headers: {"Content-Type": "application/x-www-form-urlencoded"},
+        body: "data=" + encodeURIComponent(query),
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+      if (!resp.ok) continue;
+      const data = await resp.json();
+      const polys = _extractPolygons(data);
+      if (!polys.length) { _waterCacheSet(lat, lon, null); return null; }
+      const containing = polys.find(p => pointInPolygon(lat, lon, p.coords));
+      let best;
+      if (containing) {
+        best = containing;
+      } else {
+        best = polys.slice().sort((a,b) => {
+          const da = distanceM([lat,lon], polygonCentroid(a.coords));
+          const db = distanceM([lat,lon], polygonCentroid(b.coords));
+          return da - db;
+        })[0];
+      }
+      _waterCacheSet(lat, lon, best);
+      return best;
+    } catch (e) {}
+  }
+  return null;
+}
+function computeShoreline(poly, windDir, windSpeed, mode) {
+  const n = poly.length;
+  if (n < 3) return [];
+  const areaM2 = polygonAreaM2(poly);
+  const areaHa = areaM2 / 10000;
+  const strength = shorelineWindFactor(areaHa);
+  const centroid = polygonCentroid(poly);
+  const dists = poly.map(p => distanceM(p, centroid));
+  const avgDist = dists.reduce((a,b)=>a+b,0)/n || 1;
+  const leewardDir = (windDir + 180) % 360;
+  const segments = [];
+  for (let i = 0; i < n; i++) {
+    const p1 = poly[i];
+    const p2 = poly[(i + 1) % n];
+    const mid = [(p1[0]+p2[0])/2, (p1[1]+p2[1])/2];
+    const segAngle = bearingDeg(centroid, mid);
+    const diff = Math.abs(((segAngle - leewardDir + 540) % 360) - 180);
+    const leewardCos = Math.cos(diff * Math.PI / 180);
+    const step = Math.max(1, Math.floor(n / 30));
+    const iPrev = (i - step + n) % n;
+    const iNext = (i + step) % n;
+    const neighborAvg = (dists[iPrev] + dists[iNext]) / 2;
+    const concavity = (dists[i] - neighborAvg) / Math.max(5, avgDist * 0.15);
+    let score = 50;
+    if (mode === "peaceful") {
+      score += leewardCos * 35 * strength;
+      score += -Math.max(-1.5, Math.min(1.5, concavity)) * 12;
+    } else {
+      if (windSpeed >= 2 && windSpeed <= 5) score += -leewardCos * 25 * strength;
+      else if (windSpeed > 5) score += leewardCos * 15 * strength;
+      score += Math.max(-1.5, Math.min(1.5, concavity)) * 10;
+    }
+    score = Math.max(0, Math.min(100, Math.round(score)));
+    segments.push({ i, mid, coords: [p1, p2], score, isBest: false });
+  }
+  const sorted = segments.slice().sort((a,b) => b.score - a.score);
+  for (let k = 0; k < 3 && k < sorted.length; k++) sorted[k].isBest = true;
+  return segments;
+}
+function shoreColor(score) {
+  if (score >= 65) return "#3fb950";
+  if (score >= 45) return "#d29922";
+  return "#f85149";
+}
+function drawScoredShoreline(map, poly, segments) {
+  const group = L.layerGroup();
+  for (const seg of segments) {
+    const c = shoreColor(seg.score);
+    const weight = seg.isBest ? 8 : 5;
+    const opacity = seg.isBest ? 1.0 : 0.75;
+    L.polyline(seg.coords, {
+      color: c, weight, opacity,
+      lineCap: "round", lineJoin: "round"
+    }).addTo(group);
+  }
+  group.addTo(map);
+  return group;
+}
+function computeWbMod(waterBody) {
+  if (!waterBody || !waterBody.coords) {
+    return { windFactor: 1.0, areaHa: null, perimeterM: null, shape: null, name: null };
+  }
+  const areaM2 = polygonAreaM2(waterBody.coords);
+  const areaHa = areaM2 / 10000;
+  const perimeterM = polygonPerimeterM(waterBody.coords);
+  const shape = polygonShape(waterBody.coords);
+  let windFactor = 1.0;
+  if (areaHa < 0.5) windFactor = 0.5;
+  else if (areaHa < 2) windFactor = 0.7;
+  else if (areaHa < 10) windFactor = 1.0;
+  else if (areaHa < 100) windFactor = 1.2;
+  else windFactor = 1.4;
+  const name = (waterBody.tags && waterBody.tags.name) || null;
+  return { windFactor, areaHa, perimeterM, shape, name };
+}
+
+// ============================================================
+// ЗАВАНТАЖЕННЯ ПОГОДИ
+// ============================================================
+async function fetchWeather(lat, lon) {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
+    + `&hourly=temperature_2m,relative_humidity_2m,precipitation,cloud_cover,surface_pressure,wind_speed_10m,wind_direction_10m`
+    + `&timezone=auto&forecast_days=${FORECAST_DAYS}&past_days=${PAST_DAYS}`;
+  let response;
+  try { response = await fetch(url); }
+  catch (e) { throw new Error("Не вдалося з'єднатися з Open-Meteo. Перевірте інтернет."); }
+  if (response.status === 429) throw new Error("Погодний сервіс обмежив запити (429). Спробуйте за 1–2 хвилини.");
+  if (!response.ok) throw new Error(`Помилка сервера погоди (${response.status}).`);
+  const data = await response.json();
+  if (!data.hourly || !Array.isArray(data.hourly.time) || data.hourly.time.length === 0) {
+    throw new Error("Погодний сервіс повернув порожні дані. Спробуйте пізніше.");
+  }
+  return data;
+}
+function buildSnapshot(weatherData, targetDate) {
+  const hourly = weatherData.hourly;
+  const times = hourly.time;
+  const tzOffsetSec = weatherData.utc_offset_seconds || 0;
+  const locTarget = new Date(targetDate.getTime() + tzOffsetSec * 1000);
+  const targetStr = isoHour(locTarget);
+  let idx = times.indexOf(targetStr);
+  if (idx < 0) idx = Math.max(0, times.length - 1);
+  const pHistory = hourly.surface_pressure || [];
+  const pNow = safeVal(pHistory, idx) * HPA_TO_MMHG;
+  let p24hAgo = safeVal(pHistory, idx - HOURS_PER_DAY, pNow) * HPA_TO_MMHG;
+  if (idx < HOURS_PER_DAY) p24hAgo = pNow;
+  const elevation = weatherData.elevation || 0;
+  const norm = calculateNormPressure(elevation);
+  const tNow = safeVal(hourly.temperature_2m, idx);
+  const startIdx = Math.max(0, idx - HOURS_PER_DAY);
+  const tempsWindow = (hourly.temperature_2m || []).slice(startIdx, idx).filter(v => v != null);
+  let waterTemp;
+  if (tempsWindow.length === 0) waterTemp = Math.round(tNow * WATER_TEMP_LAG_FACTOR * 10) / 10;
+  else {
+    const avg = tempsWindow.reduce((a,b) => a+b, 0) / tempsWindow.length;
+    waterTemp = Math.round(avg * WATER_TEMP_LAG_FACTOR * 10) / 10;
+  }
+  const windDir = safeVal(hourly.wind_direction_10m, idx);
+  const {from: windFrom, bank: surfBank} = getSurfZone(windDir);
+  const windKmh = safeVal(hourly.wind_speed_10m, idx);
+  const nowLoc = locationNow(tzOffsetSec);
+  const nowStr = isoHour(nowLoc);
+  const nowIdx = times.indexOf(nowStr);
+  return {
+    elevation, targetIndex: idx, tzOffsetSec, nowIdx,
+    pNow, p24hDelta: pNow - p24hAgo, pressureNorm: norm,
+    tNow, waterTemp,
+    windSpeedMs: windKmh / KMH_TO_MS, windDirDeg: windDir,
+    precipNow: safeVal(hourly.precipitation, idx),
+    cloudNow: safeVal(hourly.cloud_cover, idx),
+    windFrom, surfBank,
+    pHistory, hourly, times
+  };
+}
+
+// ============================================================
+// ЗВІТИ
+// ============================================================
+function generatePeacefulReport(snap, targetDate, wbMod) {
+  const wf = wbMod ? wbMod.windFactor : 1.0;
+  const trend = classifyPressure(snap.pNow, snap.p24hDelta, snap.pressureNorm, snap.pHistory, snap.targetIndex);
+  const moon = getMoonPhase(targetDate);
+  const carp = scoreCarp(trend.enum, snap.waterTemp, snap.windSpeedMs, snap.windFrom, precipCategory(snap.precipNow), moon.carp, wf);
+  const crucian = scoreCrucian(trend.enum, snap.waterTemp, snap.windSpeedMs, snap.windFrom, precipCategory(snap.precipNow), moon.crucian, wf);
+  const amur = scoreAmur(trend.enum, snap.waterTemp, moon.amur);
+  const tolstolob = scoreTolstolob(trend.enum, snap.waterTemp, moon.tolstolob);
+  return {
+    kind: "peaceful", trend, moonName: moon.name, snap, targetDate, wbMod,
+    scores: {carp, crucian, amur, tolstolob},
+    labels: {carp: carpLabel(carp), crucian: crucianLabel(crucian), amur: amurLabel(amur), tolstolob: tolstolobLabel(tolstolob)},
+    advice: {
+      carp: buildPeacefulAdvice("carp", snap, trend.enum),
+      crucian: buildPeacefulAdvice("crucian", snap, trend.enum),
+      amur: buildPeacefulAdvice("amur", snap, trend.enum),
+      tolstolob: buildPeacefulAdvice("tolstolob", snap, trend.enum)
+    },
+    aroma: aromaAdvice(snap.waterTemp)
+  };
+}
+function generatePredatorReport(snap, targetDate, wbMod) {
+  const wf = wbMod ? wbMod.windFactor : 1.0;
+  const trend = classifyPressure(snap.pNow, snap.p24hDelta, snap.pressureNorm, snap.pHistory, snap.targetIndex);
+  const moon = getMoonPhase(targetDate);
+  const tod = timeOfDay(targetDate.getHours());
+  const light = lightCondition(tod, snap.cloudNow, moon.name);
+  const precip = precipCategory(snap.precipNow);
+  const pike = scorePike(trend.enum, snap.waterTemp, snap.windSpeedMs, precip, light, wf);
+  const perch = scorePerch(trend.enum, snap.waterTemp, snap.windSpeedMs, precip, light, wf);
+  const zander = scoreZander(trend.enum, snap.waterTemp, snap.windSpeedMs, precip, light, wf);
+  return {
+    kind: "predator", trend, moonName: moon.name, tod, light, snap, targetDate, wbMod,
+    scores: {pike, perch, zander},
+    labels: {pike: predatorLabel(pike), perch: predatorLabel(perch), zander: predatorLabel(zander)},
+    advice: {
+      pike: buildPredatorAdvice("pike", snap, trend.enum, light),
+      perch: buildPredatorAdvice("perch", snap, trend.enum, light),
+      zander: buildPredatorAdvice("zander", snap, trend.enum, light)
+    }
+  };
+}
+
+// ============================================================
+// РЕНДЕР
+// ============================================================
+const COLORS = {red:"#f85149", yellow:"#d29922", green:"#3fb950", orange:"#f0883e", blue:"#58a6ff"};
+
+function renderScoreRow(label, score, labelObj) {
+  const color = COLORS[labelObj.c] || COLORS.green;
+  return `<div class="score-row">
+    <div class="label">${label}</div>
+    <div class="bar"><div class="fill" style="width:${score}%;background:${color}"></div></div>
+    <div class="val" style="color:${color}">${score}%</div>
+  </div>
+  <div style="font-size:12.5px;color:var(--text2);margin:-4px 0 10px 0">${labelObj.t}</div>`;
+}
+function renderWeatherGrid(snap, moonName) {
+  return `<div class="weather-grid">
+    <span class="k">🌡 Повітря</span><span class="v">${snap.tNow.toFixed(1)} °C</span>
+    <span class="k">💧 Вода</span><span class="v">${snap.waterTemp.toFixed(1)} °C</span>
+    <span class="k">📉 Тиск</span><span class="v">${snap.pNow.toFixed(1)} мм</span>
+    <span class="k">⬇️ Зміна 24г</span><span class="v">${snap.p24hDelta >= 0 ? "+" : ""}${snap.p24hDelta.toFixed(1)} мм</span>
+    <span class="k">🌬 Вітер</span><span class="v">${snap.windSpeedMs.toFixed(1)} м/с, ${snap.windFrom}</span>
+    <span class="k">📍 Берег</span><span class="v">${snap.surfBank}</span>
+    <span class="k">☁️ Хмарність</span><span class="v">${Math.round(snap.cloudNow)} %</span>
+    <span class="k">🌧 Опади</span><span class="v">${snap.precipNow.toFixed(2)} мм/год</span>
+    <span class="k">🌙 Місяць</span><span class="v">${moonName}</span>
+  </div>`;
+}
+function renderAdviceDetails(title, adv) {
+  const sections = [
+    ["📍 Точки лову", adv.spot],
+    ["🏹 Тактика", adv.tactics],
+    ["🏗 Снасті", adv.gear],
+    ["🥣 Прикормка", adv.groundbait],
+    ["🪝 Насадки", adv.bait]
+  ].filter(([_, v]) => v && v.trim());
+  const content = sections.map(([t, v]) => `<h3>${t}</h3><div style="white-space:pre-line;font-size:14px">${v}</div>`).join("");
+  return `<details><summary>${title}</summary><div class="content">${content}</div></details>`;
+}
+function renderWaterBodyInfo(wbMod) {
+  if (!wbMod || wbMod.areaHa == null) return "";
+  const name = wbMod.name ? `<strong>${wbMod.name}</strong> · ` : "";
+  const area = wbMod.areaHa < 1
+    ? `${(wbMod.areaHa * 10000).toFixed(0)} м²`
+    : `${wbMod.areaHa.toFixed(1)} га`;
+  const perim = wbMod.perimeterM < 1000
+    ? `${wbMod.perimeterM.toFixed(0)} м`
+    : `${(wbMod.perimeterM / 1000).toFixed(2)} км`;
+  const elong = wbMod.shape ? wbMod.shape.elongation.toFixed(1) : "?";
+  const orient = wbMod.shape ? Math.round(wbMod.shape.orientation) : "?";
+  const shapeDesc = wbMod.shape
+    ? (wbMod.shape.elongation < 1.3 ? "округла"
+      : wbMod.shape.elongation < 2 ? "злегка витягнута"
+      : wbMod.shape.elongation < 3 ? "витягнута"
+      : "сильно витягнута")
+    : "";
+  return `<div class="info-box">
+    🌊 <strong>Водойма:</strong> ${name}${area}<br>
+    📏 Периметр: ${perim}<br>
+    📐 Форма: ${shapeDesc} (×${elong}), орієнтація ~${orient}°
+  </div>`;
+}
+function renderReportMapBlock(windFrom, windSpeedMs, isPredator, wbMod) {
+  const legendLeeward = isPredator
+    ? `<span><span class="line" style="background:#3fb950"></span>Підвітряний — спокійна вода</span>`
+    : `<span><span class="line" style="background:#3fb950"></span>Підвітряний — корм і кисень</span>`;
+  const legendWindward = isPredator
+    ? `<span><span class="line" style="background:#f85149"></span>Навітряний — «ряб», маскує</span>`
+    : `<span><span class="line" style="background:#f85149"></span>Навітряний — вас видно</span>`;
+  const legendYellow = `<span><span class="line" style="background:#d29922"></span>Нейтрально</span>`;
+  const hasWb = wbMod && wbMod.areaHa != null;
+  const hint = isPredator
+    ? `💨 Хижаки: помірний «ряб» на навітряному березі. Вітер ${windSpeedMs.toFixed(1)} м/с з ${windFrom}.`
+    : `💨 Мирна риба: підвітряний берег (зелений). Вітер ${windSpeedMs.toFixed(1)} м/с з ${windFrom}.`;
+  return `
+    <div class="card">
+      <h2>🗺 Рекомендований берег</h2>
+      <div class="report-map" id="reportMap">
+        <div class="report-map-controls">
+          <button class="report-map-btn" id="btnReportFullscreen" title="На весь екран" aria-label="На весь екран">⛶</button>
+          <button class="report-map-btn" id="btnReportDepth" title="Глибини" aria-label="Глибини">🌊</button>
+          <button class="report-map-btn" id="btnReportLayer" title="Шар" aria-label="Шар карти">🛰</button>
+        </div>
+      </div>
+      <div class="map-legend">${legendLeeward}${legendYellow}${legendWindward}</div>
+      <div class="hint">${hasWb ? "🟢 топ-3 місця — товстіша лінія" : "Контур водойми не знайдено в OSM"}</div>
+      <div class="hint">${hint}</div>
+    </div>`;
+}
+function renderPeacefulReport(report) {
+  const {scores, labels, snap, trend, moonName, targetDate, advice, aroma, wbMod} = report;
+  const dateStr = `${targetDate.getFullYear()}-${pad2(targetDate.getMonth()+1)}-${pad2(targetDate.getDate())} ${pad2(targetDate.getHours())}:00`;
+  return `
+    <div class="card">
+      <h2>📊 Активність</h2>
+      ${renderScoreRow("🐟 Короп", scores.carp, labels.carp)}
+      ${renderScoreRow("🐡 Карась", scores.crucian, labels.crucian)}
+      ${renderScoreRow("🐠 Білий амур", scores.amur, labels.amur)}
+      ${renderScoreRow("🐟 Товстолоб", scores.tolstolob, labels.tolstolob)}
+    </div>
+    ${renderWaterBodyInfo(wbMod)}
+    <div class="card">
+      <h2>🌤 Погода · ${dateStr}</h2>
+      ${renderWeatherGrid(snap, moonName)}
+    </div>
+    <div class="card">
+      <h2>ℹ️ Тренд тиску</h2>
+      <div class="trend-box">
+        <div class="trend-title">${trend.label}</div>
+        <div class="trend-desc">${trend.desc}</div>
+      </div>
+    </div>
+    ${renderReportMapBlock(snap.windFrom, snap.windSpeedMs, false, wbMod)}
+    <div class="card">
+      <h2>📈 Активність мирних · 11 днів</h2>
+      <div class="chart-wrap tall"><canvas id="chart11"></canvas></div>
+      <div class="hint">Середнє за світловий день 05:00–21:00 · 🌑🌒🌓… під віссю — фаза місяця</div>
+    </div>
+    <div class="card">
+      <h2>📉 Тиск · 7 днів історії + прогноз</h2>
+      <div class="chart-wrap pressure"><canvas id="chartP"></canvas></div>
+      <div class="hint">Оранжева пунктирна — «зараз». Червона — обраний час лову.</div>
+    </div>
+    <div class="card">
+      <h2>Рекомендації</h2>
+      ${renderAdviceDetails("👑 Короп", advice.carp)}
+      ${renderAdviceDetails("🐡 Карась", advice.crucian)}
+      ${renderAdviceDetails("🐠 Білий амур", advice.amur)}
+      ${renderAdviceDetails("🐟 Товстолоб", advice.tolstolob)}
+    </div>
+    <div class="card">
+      <h2>👃 Ароматика</h2>
+      <div style="white-space:pre-line;font-size:14px">${aroma}</div>
+    </div>`;
+}
+function renderPredatorReport(report) {
+  const {scores, labels, snap, trend, moonName, targetDate, advice, light, tod, wbMod} = report;
+  const dateStr = `${targetDate.getFullYear()}-${pad2(targetDate.getMonth()+1)}-${pad2(targetDate.getDate())} ${pad2(targetDate.getHours())}:00`;
+  return `
+    <div class="card">
+      <h2>📊 Активність хижаків</h2>
+      ${renderScoreRow("🦈 Щука", scores.pike, labels.pike)}
+      ${renderScoreRow("🐟 Окунь", scores.perch, labels.perch)}
+      ${renderScoreRow("🐡 Судак", scores.zander, labels.zander)}
+    </div>
+    ${renderWaterBodyInfo(wbMod)}
+    <div class="card">
+      <h2>🌅 Умови освітлення</h2>
+      <div style="font-size:14px">${lightLabel(light)} · ${todLabel(tod)}</div>
+    </div>
+    <div class="card">
+      <h2>🌤 Погода · ${dateStr}</h2>
+      ${renderWeatherGrid(snap, moonName)}
+    </div>
+    <div class="card">
+      <h2>ℹ️ Тренд тиску</h2>
+      <div class="trend-box">
+        <div class="trend-title">${trend.label}</div>
+        <div class="trend-desc">${trend.desc}</div>
+      </div>
+    </div>
+    ${renderReportMapBlock(snap.windFrom, snap.windSpeedMs, true, wbMod)}
+    <div class="card">
+      <h2>📈 Активність хижаків · 24 години</h2>
+      <div class="chart-wrap tall"><canvas id="chart24"></canvas></div>
+      <div class="hint">Золоті вертикальні зони — світанок (05–07) та захід (18–20)</div>
+    </div>
+    <div class="card">
+      <h2>📉 Тиск · 7 днів історії + прогноз</h2>
+      <div class="chart-wrap pressure"><canvas id="chartP"></canvas></div>
+      <div class="hint">Оранжева пунктирна — «зараз». Червона — обраний час лову.</div>
+    </div>
+    <div class="card">
+      <h2>Рекомендації</h2>
+      ${renderAdviceDetails("🦈 Щука", advice.pike)}
+      ${renderAdviceDetails("🐟 Окунь", advice.perch)}
+      ${renderAdviceDetails("🐡 Судак", advice.zander)}
+    </div>`;
+}
+
+// ============================================================
+// ГРАФІКИ
+// ============================================================
+const _activeCharts = [];
+function destroyAllCharts() {
+  while (_activeCharts.length) {
+    const c = _activeCharts.pop();
+    try { c.destroy(); } catch (e) {}
+  }
+}
+function makeChart(canvas, config) {
+  if (typeof Chart === "undefined") { console.warn("Chart.js недоступний"); return null; }
+  const existing = Chart.getChart(canvas);
+  if (existing) existing.destroy();
+  const c = new Chart(canvas, config);
+  _activeCharts.push(c);
+  return c;
+}
+const moonIconsPlugin = {
+  id: "moonIcons",
+  afterDraw(chart) {
+    const opts = chart.options.plugins && chart.options.plugins.moonIcons;
+    if (!opts || !opts.icons || !opts.icons.length) return;
+    const { ctx, chartArea, scales } = chart;
+    const xScale = scales.x;
+    if (!xScale) return;
+    ctx.save();
+    ctx.font = "14px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = "#8b949e";
+    const icons = opts.icons;
+    for (let i = 0; i < icons.length; i++) {
+      try {
+        const x = xScale.getPixelForTick(i);
+        if (isFinite(x)) ctx.fillText(icons[i], x, chartArea.bottom + 6);
+      } catch (e) {}
+    }
+    ctx.restore();
+  }
+};
+if (typeof Chart !== "undefined") Chart.register(moonIconsPlugin);
+const chartDefaults = {
+  responsive: true, maintainAspectRatio: false,
+  plugins: {legend: {labels: {color: "#e6edf3", font: {size: 11}, boxWidth: 12}}},
+  scales: {
+    x: {ticks: {color: "#8b949e", font: {size: 10}}, grid: {color: "#30363d"}},
+    y: {ticks: {color: "#8b949e", font: {size: 10}}, grid: {color: "#30363d"}}
+  }
+};
+function drawPressureChart(canvasId, snap) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const times = snap.times;
+  const pHistory = snap.pHistory;
+  const pMmhg = times.map((_, i) => safeVal(pHistory, i) * HPA_TO_MMHG);
+  const labels = times.map(formatDayOnly);
+  const norm = snap.pressureNorm;
+  const verticalLinesPlugin = {
+    id: "verticalLines_" + canvasId,
+    afterDatasetsDraw(chart) {
+      const { ctx, chartArea, scales } = chart;
+      const xScale = scales.x;
+      if (!xScale) return;
+      ctx.save();
+      if (snap.nowIdx != null && snap.nowIdx >= 0 && snap.nowIdx < times.length) {
+        const x = xScale.getPixelForValue(snap.nowIdx);
+        if (isFinite(x)) {
+          ctx.strokeStyle = "#f0883e";
+          ctx.setLineDash([4, 4]);
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(x, chartArea.top);
+          ctx.lineTo(x, chartArea.bottom);
+          ctx.stroke();
+        }
+      }
+      if (snap.targetIndex != null && snap.targetIndex >= 0 && snap.targetIndex < times.length) {
+        const x = xScale.getPixelForValue(snap.targetIndex);
+        if (isFinite(x)) {
+          ctx.strokeStyle = "#f85149";
+          ctx.setLineDash([6, 3]);
+          ctx.lineWidth = 1.8;
+          ctx.beginPath();
+          ctx.moveTo(x, chartArea.top);
+          ctx.lineTo(x, chartArea.bottom);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+  };
+  makeChart(canvas, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        {label: "Тиск", data: pMmhg, borderColor: "#58a6ff", borderWidth: 2, pointRadius: 0, tension: 0.3, fill: false},
+        {label: `Норма (${norm} мм)`, data: pMmhg.map(() => norm), borderColor: "#8b949e", borderDash: [4,4], borderWidth: 1, pointRadius: 0, fill: false}
+      ]
+    },
+    options: {
+      ...chartDefaults,
+      plugins: {legend: {labels: {color: "#e6edf3", font: {size: 10}, boxWidth: 10}}},
+      scales: {
+        x: {ticks: {color: "#8b949e", font: {size: 9}, maxTicksLimit: 6, autoSkip: true, maxRotation: 0}, grid: {color: "#30363d"}},
+        y: {ticks: {color: "#8b949e", font: {size: 10}}, grid: {color: "#30363d"}}
+      }
+    },
+    plugins: [verticalLinesPlugin]
+  });
+}
+function draw11DayChart(canvasId, weatherData) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const hourly = weatherData.hourly;
+  const times = hourly.time || [];
+  const norm = calculateNormPressure(weatherData.elevation || 0);
+  const tzOffsetSec = weatherData.utc_offset_seconds || 0;
+  const locNow = locationNow(tzOffsetSec);
+  const todayIso = isoDateOnly(locNow);
+  const dayLabels = [], moonIcons = [];
+  const carpD = [], crucianD = [], amurD = [], tolstolobD = [];
+  for (let off = 0; off < ACTIVITY_FORECAST_DAYS; off++) {
+    const dayIso = addDaysToIsoDate(todayIso, off);
+    const dayStr = dayIso + "T00:00";
+    const startIdx = times.indexOf(dayStr);
+    if (startIdx < 0) continue;
+    const dayAsDate = new Date(dayIso + "T12:00:00Z");
+    const moon = getMoonPhase(dayAsDate);
+    const carp = [], crucian = [], amur = [], tol = [];
+    for (let h = 0; h < 24; h++) {
+      const i = startIdx + h;
+      if (i >= times.length) break;
+      const pNow = safeVal(hourly.surface_pressure, i) * HPA_TO_MMHG;
+      const p24 = safeVal(hourly.surface_pressure, i - HOURS_PER_DAY, pNow) * HPA_TO_MMHG;
+      const trend = classifyPressure(pNow, pNow - p24, norm, hourly.surface_pressure, i);
+      const tNow = safeVal(hourly.temperature_2m, i);
+      const sI = Math.max(0, i - HOURS_PER_DAY);
+      const tw = (hourly.temperature_2m || []).slice(sI, i).filter(v => v != null);
+      const wTemp = tw.length ? (tw.reduce((a,b)=>a+b,0)/tw.length)*WATER_TEMP_LAG_FACTOR : tNow*WATER_TEMP_LAG_FACTOR;
+      const wDir = safeVal(hourly.wind_direction_10m, i);
+      const {from: wFrom} = getSurfZone(wDir);
+      const wMs = safeVal(hourly.wind_speed_10m, i) / KMH_TO_MS;
+      const precip = precipCategory(safeVal(hourly.precipitation, i));
+      carp.push(scoreCarp(trend.enum, wTemp, wMs, wFrom, precip, moon.carp));
+      crucian.push(scoreCrucian(trend.enum, wTemp, wMs, wFrom, precip, moon.crucian));
+      amur.push(scoreAmur(trend.enum, wTemp, moon.amur));
+      tol.push(scoreTolstolob(trend.enum, wTemp, moon.tolstolob));
+    }
+    const slice = arr => arr.slice(DAYLIGHT_START_HOUR, DAYLIGHT_END_HOUR);
+    const avg = arr => arr.length ? Math.round(arr.reduce((a,b)=>a+b,0)/arr.length) : 0;
+    const [y, m, d] = dayIso.split("-");
+    dayLabels.push(`${d}.${m}`);
+    moonIcons.push(moon.icon);
+    carpD.push(avg(slice(carp)));
+    crucianD.push(avg(slice(crucian)));
+    amurD.push(avg(slice(amur)));
+    tolstolobD.push(avg(slice(tol)));
+  }
+  makeChart(canvas, {
+    type: "line",
+    data: {
+      labels: dayLabels,
+      datasets: [
+        {label: "Короп", data: carpD, borderColor: "#f85149", tension: 0.3, borderWidth: 2.2, pointRadius: 3, pointBackgroundColor: "#f85149"},
+        {label: "Карась", data: crucianD, borderColor: "#d29922", tension: 0.3, borderWidth: 2.2, pointRadius: 3, pointBackgroundColor: "#d29922"},
+        {label: "Білий Амур", data: amurD, borderColor: "#3fb950", tension: 0.3, borderWidth: 2.2, borderDash: [4,3], pointRadius: 3, pointBackgroundColor: "#3fb950"},
+        {label: "Товстолоб", data: tolstolobD, borderColor: "#58a6ff", tension: 0.3, borderWidth: 2.2, borderDash: [1,3], pointRadius: 3, pointBackgroundColor: "#58a6ff"}
+      ]
+    },
+    options: {
+      ...chartDefaults,
+      layout: {padding: {bottom: 22}},
+      plugins: {
+        legend: {labels: {color: "#e6edf3", font: {size: 11}, boxWidth: 12}},
+        moonIcons: {icons: moonIcons}
+      },
+      scales: {
+        x: {ticks: {color: "#8b949e", font: {size: 10}, maxRotation: 0}, grid: {color: "#30363d"}},
+        y: {min: 0, max: 100, ticks: {color: "#8b949e", font: {size: 10}}, grid: {color: "#30363d"}}
+      }
+    }
+  });
+}
+function draw24hChart(canvasId, weatherData, targetDate) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const hourly = weatherData.hourly;
+  const times = hourly.time || [];
+  const tzOffsetSec = weatherData.utc_offset_seconds || 0;
+  const locTarget = new Date(targetDate.getTime() + tzOffsetSec * 1000);
+  const dayIso = isoDateOnly(locTarget);
+  const dayStr = dayIso + "T00:00";
+  let startIdx = times.indexOf(dayStr);
+  if (startIdx < 0) {
+    for (let h = 0; h < 24; h++) {
+      const testStr = `${dayIso}T${pad2(h)}:00`;
+      const idx = times.indexOf(testStr);
+      if (idx >= 0) { startIdx = idx - h; break; }
+    }
+  }
+  if (startIdx < 0) return;
+  const norm = calculateNormPressure(weatherData.elevation || 0);
+  const moon = getMoonPhase(targetDate);
+  const hours = [], pike = [], perch = [], zander = [];
+  for (let h = 0; h < 24; h++) {
+    const i = startIdx + h;
+    if (i < 0 || i >= times.length) break;
+    const pNow = safeVal(hourly.surface_pressure, i) * HPA_TO_MMHG;
+    const p24 = safeVal(hourly.surface_pressure, i - HOURS_PER_DAY, pNow) * HPA_TO_MMHG;
+    const trend = classifyPressure(pNow, pNow - p24, norm, hourly.surface_pressure, i);
+    const tNow = safeVal(hourly.temperature_2m, i);
+    const sI = Math.max(0, i - HOURS_PER_DAY);
+    const tw = (hourly.temperature_2m || []).slice(sI, i).filter(v => v != null);
+    const wTemp = tw.length ? (tw.reduce((a,b)=>a+b,0)/tw.length)*WATER_TEMP_LAG_FACTOR : tNow*WATER_TEMP_LAG_FACTOR;
+    const wMs = safeVal(hourly.wind_speed_10m, i) / KMH_TO_MS;
+    const precip = precipCategory(safeVal(hourly.precipitation, i));
+    const cloud = safeVal(hourly.cloud_cover, i);
+    const tod = timeOfDay(h);
+    const light = lightCondition(tod, cloud, moon.name);
+    hours.push(`${pad2(h)}:00`);
+    pike.push(scorePike(trend.enum, wTemp, wMs, precip, light));
+    perch.push(scorePerch(trend.enum, wTemp, wMs, precip, light));
+    zander.push(scoreZander(trend.enum, wTemp, wMs, precip, light));
+  }
+  const smooth = arr => {
+    const n = arr.length, half = 1, out = [];
+    for (let i = 0; i < n; i++) {
+      const lo = Math.max(0, i-half), hi = Math.min(n, i+half+1);
+      out.push(arr.slice(lo, hi).reduce((a,b)=>a+b,0)/(hi-lo));
+    }
+    return out;
+  };
+  makeChart(canvas, {
+    type: "line",
+    data: {
+      labels: hours,
+      datasets: [
+        {label: "Щука", data: smooth(pike), borderColor: "#58a6ff", tension: 0.3, borderWidth: 2.5, pointRadius: 2},
+        {label: "Окунь", data: smooth(perch), borderColor: "#f0883e", tension: 0.3, borderWidth: 2.2, pointRadius: 2},
+        {label: "Судак", data: smooth(zander), borderColor: "#bc8cff", tension: 0.3, borderWidth: 2, borderDash: [4,3], pointRadius: 2}
+      ]
+    },
+    options: {
+      ...chartDefaults,
+      plugins: {legend: {labels: {color: "#e6edf3", font: {size: 11}, boxWidth: 12}}},
+      scales: {
+        x: {ticks: {color: "#8b949e", font: {size: 9}, maxTicksLimit: 8, autoSkip: true, maxRotation: 0}, grid: {color: "#30363d"}},
+        y: {min: 0, max: 100, ticks: {color: "#8b949e", font: {size: 10}}, grid: {color: "#30363d"}}
+      }
+    }
+  });
+}
+
+// ============================================================
+// КАРТА
+// ============================================================
+let pickerMap = null;
+let reportMap = null;
+let currentLayerType = "satellite";
+let pickerDepthEnabled = false;
+let reportDepthEnabled = true;
+
+const TILES = {
+  osm: { url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+         attribution: '© OpenStreetMap', maxZoom: 19, needsLabels: false },
+  satellite: { url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+               attribution: '© Esri, Maxar, Earthstar Geographics', maxZoom: 19, needsLabels: true }
+};
+const DEPTH_TILE_URL = "https://tiles.openseamap.org/depth/{z}/{x}/{y}.png";
+const ESRI_PLACES_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}";
+const ESRI_ROADS_URL  = "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}";
+const ESRI_REF_ATTR   = '© Esri Reference';
+
+function ensureLabelsPane(map) {
+  if (!map.getPane("labelsPane")) map.createPane("labelsPane");
+  const pane = map.getPane("labelsPane");
+  pane.style.zIndex = 460;
+  pane.style.pointerEvents = "none";
+}
+function applyTile(map, type) {
+  if (!map) return;
+  if (map._customTile) { map.removeLayer(map._customTile); map._customTile = null; }
+  if (map._labelsLayer) { map.removeLayer(map._labelsLayer); map._labelsLayer = null; }
+  if (map._roadsLayer) { map.removeLayer(map._roadsLayer); map._roadsLayer = null; }
+  const t = TILES[type];
+  map._customTile = L.tileLayer(t.url, {attribution: t.attribution, maxZoom: t.maxZoom}).addTo(map);
+  if (t.needsLabels) {
+    ensureLabelsPane(map);
+    map._roadsLayer = L.tileLayer(ESRI_ROADS_URL, {attribution: ESRI_REF_ATTR, maxZoom: t.maxZoom, opacity: 0.85, pane: "labelsPane"}).addTo(map);
+    map._labelsLayer = L.tileLayer(ESRI_PLACES_URL, {attribution: ESRI_REF_ATTR, maxZoom: t.maxZoom, opacity: 0.95, pane: "labelsPane"}).addTo(map);
+  }
+  reorderMapLayers(map);
+}
+function reorderMapLayers(map) {
+  if (!map) return;
+  if (map._customTile) map._customTile.bringToBack();
+  if (map._depthLayer) map._depthLayer.bringToFront();
+  if (map._roadsLayer) map._roadsLayer.bringToFront();
+  if (map._labelsLayer) map._labelsLayer.bringToFront();
+  if (map._shoreGroup) map._shoreGroup.bringToFront();
+  if (map._windGroup) map._windGroup.bringToFront();
+}
+function toggleDepthLayer(map, enabled) {
+  if (!map) return;
+  if (map._depthLayer) { map.removeLayer(map._depthLayer); map._depthLayer = null; }
+  if (enabled) {
+    map._depthLayer = L.tileLayer(DEPTH_TILE_URL, {attribution: '© OpenSeaMap Depth Data', maxZoom: 18, opacity: 0.75}).addTo(map);
+  }
+  reorderMapLayers(map);
+}
+function destination(center, bearingDeg, distanceM) {
+  const rad = bearingDeg * Math.PI / 180;
+  const [lat0, lon0] = center;
+  const cosLat = Math.cos(lat0 * Math.PI / 180);
+  const dLat = (distanceM * Math.cos(rad)) / 111320;
+  const dLon = (distanceM * Math.sin(rad)) / (111320 * cosLat);
+  return [lat0 + dLat, lon0 + dLon];
+}
+function sectorPoints(center, radiusM, dirStart, dirEnd, steps) {
+  steps = steps || 48;
+  const [lat0, lon0] = center;
+  const cosLat = Math.cos(lat0 * Math.PI / 180);
+  const pts = [center];
+  for (let i = 0; i <= steps; i++) {
+    const d = dirStart + (dirEnd - dirStart) * i / steps;
+    const rad = d * Math.PI / 180;
+    const dLat = (radiusM * Math.cos(rad)) / 111320;
+    const dLon = (radiusM * Math.sin(rad)) / (111320 * cosLat);
+    pts.push([lat0 + dLat, lon0 + dLon]);
+  }
+  return pts;
+}
+function addWindOverlay(map, center, windDir, windSpeedMs, radiusM) {
+  if (!map || windDir == null || isNaN(windDir)) return;
+  const r = radiusM || 350;
+  const group = L.layerGroup().addTo(map);
+  const leewardCenter = (windDir + 180) % 360;
+  L.polygon(sectorPoints(center, r, leewardCenter - 60, leewardCenter + 60),
+    { color: "#3fb950", fillColor: "#3fb950", fillOpacity: 0.32, weight: 1.5, opacity: 0.75 }).addTo(group);
+  L.polygon(sectorPoints(center, r, windDir - 60, windDir + 60),
+    { color: "#f85149", fillColor: "#f85149", fillOpacity: 0.18, weight: 1.5, opacity: 0.6, dashArray: "4,4" }).addTo(group);
+  const arrowTip = destination(center, leewardCenter, r * 1.05);
+  L.polyline([center, arrowTip], { color: "#58a6ff", weight: 4, opacity: 0.95 }).addTo(group);
+  L.circleMarker(center, { radius: 7, fillColor: "#58a6ff", color: "#ffffff", weight: 3, fillOpacity: 1 }).addTo(group);
+  const labelPt = destination(center, leewardCenter, r * 0.55);
+  L.marker(labelPt, {
+    icon: L.divIcon({
+      className: "wind-label",
+      html: `<div style="background:rgba(13,17,23,.92);color:#58a6ff;padding:4px 8px;border-radius:6px;font-size:12px;font-weight:600;white-space:nowrap;border:1px solid #30363d;">💨 ${windSpeedMs.toFixed(1)} м/с</div>`,
+      iconSize: [0, 0]
+    })
+  }).addTo(group);
+  map._windGroup = group;
+  reorderMapLayers(map);
+  return group;
+}
+function addWaterBodyLayer(map, waterBody, segments, mode) {
+  if (!map || !waterBody || !waterBody.coords) return;
+  if (map._shoreGroup) { map.removeLayer(map._shoreGroup); map._shoreGroup = null; }
+  if (map._wbOutline) { map.removeLayer(map._wbOutline); map._wbOutline = null; }
+  map._wbOutline = L.polygon(waterBody.coords, {
+    color: "#58a6ff", weight: 1.5, opacity: 0.5, fill: false, dashArray: "2,4"
+  }).addTo(map);
+  if (segments && segments.length) {
+    map._shoreGroup = drawScoredShoreline(map, waterBody.coords, segments);
+  }
+  reorderMapLayers(map);
+}
+function toggleFullscreen(el) {
+  if (!el) return;
+  const isFs = document.fullscreenElement || document.webkitFullscreenElement ||
+               document.mozFullScreenElement || document.msFullscreenElement;
+  if (!isFs) {
+    const req = el.requestFullscreen || el.webkitRequestFullscreen ||
+                el.mozRequestFullScreen || el.msRequestFullscreen;
+    if (req) req.call(el);
+  } else {
+    const exit = document.exitFullscreen || document.webkitExitFullscreen ||
+                 document.mozCancelFullScreen || document.msExitFullscreen;
+    if (exit) exit.call(document);
+  }
+}
+["fullscreenchange","webkitfullscreenchange","mozfullscreenchange","MSFullscreenChange"]
+  .forEach(evt => document.addEventListener(evt, () => {
+    setTimeout(() => {
+      if (pickerMap) pickerMap.invalidateSize();
+      if (reportMap) reportMap.invalidateSize();
+    }, 200);
+  }));
+function openPickerMap() {
+  showScreen("map");
+  requestAnimationFrame(() => {
+    if (!pickerMap) {
+      const startLat = state.lat || 49.0;
+      const startLon = state.lon || 31.0;
+      const startZoom = state.lat ? 15 : 6;
+      pickerMap = L.map("pickerMap", {center: [startLat, startLon], zoom: startZoom, zoomControl: false, attributionControl: true});
+      ensureLabelsPane(pickerMap);
+      applyTile(pickerMap, currentLayerType);
+      pickerMap.on("move", updatePickerCoordLabel);
+      pickerMap.on("zoomend", updatePickerCoordLabel);
+    } else {
+      if (state.lat && state.lon) pickerMap.setView([state.lat, state.lon], 15);
+      applyTile(pickerMap, currentLayerType);
+    }
+    toggleDepthLayer(pickerMap, pickerDepthEnabled);
+    updateDepthButtonState(pickerDepthEnabled);
+    pickerMap.invalidateSize();
+    updatePickerCoordLabel();
+  });
+}
+function updatePickerCoordLabel() {
+  if (!pickerMap) return;
+  const c = pickerMap.getCenter();
+  const el = document.getElementById("mapCoordDisplay");
+  if (el) el.textContent = `📍 ${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}`;
+}
+function updateDepthButtonState(enabled) {
+  const btn = document.getElementById("btnDepthToggle");
+  if (!btn) return;
+  btn.classList.toggle("active", enabled);
+}
+function renderReportMap(containerId, snap, waterBody, mode) {
+  requestAnimationFrame(() => {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    if (reportMap) { reportMap.remove(); reportMap = null; }
+    const center = [state.lat, state.lon];
+    const localMap = L.map(containerId, {
+      center, zoom: 14, zoomControl: false, dragging: true, touchZoom: true,
+      scrollWheelZoom: false, doubleClickZoom: true, boxZoom: false,
+      keyboard: false, tap: true, attributionControl: false
+    });
+    reportMap = localMap;
+    ensureLabelsPane(localMap);
+    applyTile(localMap, "satellite");
+    if (waterBody && waterBody.coords) {
+      const segments = computeShoreline(waterBody.coords, snap.windDirDeg, snap.windSpeedMs, mode);
+      addWaterBodyLayer(localMap, waterBody, segments, mode);
+      try {
+        const bounds = L.latLngBounds(waterBody.coords.map(c => [c[0], c[1]]));
+        if (bounds.isValid()) localMap.fitBounds(bounds, {padding: [30, 30], maxZoom: 16});
+      } catch (e) {}
+    } else {
+      addWindOverlay(localMap, center, snap.windDirDeg, snap.windSpeedMs, 350);
+    }
+    toggleDepthLayer(localMap, reportDepthEnabled);
+    updateReportDepthButtonState();
+    setTimeout(() => { if (localMap) localMap.invalidateSize(); }, 100);
+    const btnLayer = document.getElementById("btnReportLayer");
+    const btnDepth = document.getElementById("btnReportDepth");
+    const btnFs = document.getElementById("btnReportFullscreen");
+    if (btnLayer) btnLayer.onclick = () => {
+      currentLayerType = currentLayerType === "satellite" ? "osm" : "satellite";
+      applyTile(localMap, currentLayerType);
+      btnLayer.textContent = currentLayerType === "satellite" ? "🛰" : "🗺";
+      reorderMapLayers(localMap);
+    };
+    if (btnDepth) btnDepth.onclick = () => {
+      reportDepthEnabled = !reportDepthEnabled;
+      toggleDepthLayer(localMap, reportDepthEnabled);
+      updateReportDepthButtonState();
+    };
+    if (btnFs) btnFs.onclick = () => toggleFullscreen(el);
+  });
+}
+function updateReportDepthButtonState() {
+  const btn = document.getElementById("btnReportDepth");
+  if (!btn) return;
+  btn.classList.toggle("active", reportDepthEnabled);
+}
+
+// ============================================================
+// СТАН / UI
+// ============================================================
+const state = {
+  lat: null, lon: null, dateOffset: 0, mode: "peaceful",
+  weatherData: null, targetDate: null, waterBody: null, screen: "input"
+};
+const $ = id => document.getElementById(id);
+const screenInput = $("screen-input");
+const screenSelect = $("screen-select");
+const screenReport = $("screen-report");
+const screenMap = $("screen-map");
+const topbarBack = $("topbarBack");
+const topbarTitle = $("topbarTitle");
+function showScreen(name) {
+  state.screen = name;
+  [screenInput, screenSelect, screenReport, screenMap].forEach(el => { if (el) el.classList.remove("active"); });
+  if (name === "input") {
+    screenInput.classList.add("active"); topbarBack.classList.add("hidden");
+    topbarTitle.textContent = "🎣 Кльов — прогноз";
+    window.scrollTo({top: 0, behavior: "smooth"});
+  } else if (name === "select") {
+    screenSelect.classList.add("active"); topbarBack.classList.remove("hidden");
+    topbarTitle.textContent = "📍 Прогноз";
+    window.scrollTo({top: 0, behavior: "smooth"});
+  } else if (name === "report") {
+    screenReport.classList.add("active"); topbarBack.classList.remove("hidden");
+    topbarTitle.textContent = "📊 Звіт";
+    window.scrollTo({top: 0, behavior: "smooth"});
+  } else if (name === "map") {
+    screenMap.classList.add("active"); topbarBack.classList.remove("hidden");
+    topbarTitle.textContent = "🗺 Обрати місце";
+  }
+}
+topbarBack.addEventListener("click", () => {
+  if (state.screen === "report") showScreen("select");
+  else if (state.screen === "select") showScreen("input");
+  else if (state.screen === "map") showScreen("input");
+});
+
+// ============================================================
+// ІСТОРІЯ
+// ============================================================
+const HISTORY_KEY = "carp_history_v1";
+function loadHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch { return []; } }
+function saveHistory(h) { try { localStorage.setItem(HISTORY_KEY, JSON.stringify(h.slice(0, 5))); } catch {} }
+function addToHistory(lat, lon) {
+  const h = loadHistory().filter(x => !(Math.abs(x.lat-lat)<0.001 && Math.abs(x.lon-lon)<0.001));
+  h.unshift({lat, lon, t: Date.now()});
+  saveHistory(h); renderHistory();
+}
+function renderHistory() {
+  const h = loadHistory();
+  const card = $("historyCard");
+  const list = $("historyList");
+  if (h.length === 0) { card.style.display = "none"; return; }
+  card.style.display = "block";
+  list.innerHTML = h.map(x => `<button class="history-item" data-lat="${x.lat}" data-lon="${x.lon}">📍 ${x.lat.toFixed(4)}, ${x.lon.toFixed(4)}</button>`).join("");
+  list.querySelectorAll(".history-item").forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.lat = parseFloat(btn.dataset.lat);
+      state.lon = parseFloat(btn.dataset.lon);
+      goToSelect();
+    });
+  });
+}
+function updateDateChips() {
+  const today = new Date();
+  for (let i = 0; i < 3; i++) {
+    const d = addDaysLocal(today, i);
+    $("d"+i).textContent = `${pad2(d.getDate())}.${pad2(d.getMonth()+1)}`;
+  }
+}
+function goToSelect() {
+  if (state.lat == null || state.lon == null) return;
+  updateDateChips();
+  addToHistory(state.lat, state.lon);
+  showScreen("select");
+}
+let _forecastToken = 0;
+async function runForecast(mode) {
+  const token = ++_forecastToken;
+  state.mode = mode;
+  state.targetDate = addDaysLocal(new Date(), state.dateOffset);
+  if (state.dateOffset === 0) {
+    const now = new Date();
+    let h = now.getHours();
+    if (h < 6) h = 6; else if (h > 20) h = 18;
+    state.targetDate.setHours(h, 0, 0, 0);
+  } else {
+    state.targetDate.setHours(6, 0, 0, 0);
+  }
+  destroyAllCharts();
+  screenReport.innerHTML = `<div class="loading"><div class="spinner"></div><div>Отримую метеодані та контур водойми...</div></div>`;
+  showScreen("report");
+  try {
+    const [weatherData, waterBody] = await Promise.all([
+      fetchWeather(state.lat, state.lon),
+      fetchWaterBody(state.lat, state.lon).catch(() => null)
+    ]);
+    if (token !== _forecastToken) return;
+    state.weatherData = weatherData;
+    state.waterBody = waterBody;
+    const wbMod = computeWbMod(waterBody);
+    const snap = buildSnapshot(weatherData, state.targetDate);
+    const report = mode === "peaceful"
+      ? generatePeacefulReport(snap, state.targetDate, wbMod)
+      : generatePredatorReport(snap, state.targetDate, wbMod);
+    screenReport.innerHTML = mode === "peaceful"
+      ? renderPeacefulReport(report)
+      : renderPredatorReport(report);
+    setTimeout(() => {
+      if (token !== _forecastToken) return;
+      drawPressureChart("chartP", snap);
+      if (mode === "peaceful") draw11DayChart("chart11", weatherData);
+      else draw24hChart("chart24", weatherData, state.targetDate);
+      renderReportMap("reportMap", snap, waterBody, mode);
+    }, 150);
+  } catch (err) {
+    if (token !== _forecastToken) return;
+    screenReport.innerHTML = `<div class="card"><div class="error">❌ ${err.message}</div>
+      <button class="btn secondary" onclick="showScreen('select')">← Назад</button></div>`;
+  }
+}
+
+// ============================================================
+// ОБРОБНИКИ
+// ============================================================
+$("btnGeo").addEventListener("click", () => {
+  if (!navigator.geolocation) { alert("Геолокація недоступна"); return; }
+  $("btnGeo").disabled = true;
+  $("btnGeo").textContent = "⏳ Визначаю...";
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      state.lat = pos.coords.latitude;
+      state.lon = pos.coords.longitude;
+      $("btnGeo").disabled = false;
+      $("btnGeo").innerHTML = '<span class="btn-icon">📡</span>Моє місце (геолокація)';
+      goToSelect();
+    },
+    err => {
+      $("btnGeo").disabled = false;
+      $("btnGeo").innerHTML = '<span class="btn-icon">📡</span>Моє місце (геолокація)';
+      alert("Не вдалося отримати геолокацію: " + err.message);
+    },
+    {enableHighAccuracy: false, timeout: 10000, maximumAge: 300000}
+  );
+});
+$("btnPickMap").addEventListener("click", openPickerMap);
+$("btnManual").addEventListener("click", () => {
+  const lat = parseFloat($("inpLat").value);
+  const lon = parseFloat($("inpLon").value);
+  if (isNaN(lat) || isNaN(lon)) { alert("Введіть широту та довготу"); return; }
+  if (lat < -90 || lat > 90) { alert("Широта в межах [-90, 90]"); return; }
+  if (lon < -180 || lon > 180) { alert("Довгота в межах [-180, 180]"); return; }
+  state.lat = lat; state.lon = lon;
+  goToSelect();
+});
+document.querySelectorAll("#dateChips .chip").forEach(chip => {
+  chip.addEventListener("click", () => {
+    document.querySelectorAll("#dateChips .chip").forEach(c => c.classList.remove("active"));
+    chip.classList.add("active");
+    state.dateOffset = parseInt(chip.dataset.offset, 10);
+  });
+});
+document.querySelectorAll(".mode-card").forEach(card => {
+  card.addEventListener("click", () => runForecast(card.dataset.mode));
+});
+$("btnMapCancel").addEventListener("click", () => showScreen("input"));
+$("btnMapConfirm").addEventListener("click", () => {
+  if (!pickerMap) return;
+  const c = pickerMap.getCenter();
+  state.lat = c.lat; state.lon = c.lng;
+  $("inpLat").value = c.lat.toFixed(5);
+  $("inpLon").value = c.lng.toFixed(5);
+  goToSelect();
+});
+$("btnMapLayer").addEventListener("click", () => {
+  currentLayerType = currentLayerType === "satellite" ? "osm" : "satellite";
+  $("btnMapLayer").textContent = currentLayerType === "satellite" ? "🛰" : "🗺";
+  applyTile(pickerMap, currentLayerType);
+});
+$("btnDepthToggle").addEventListener("click", () => {
+  if (!pickerMap) return;
+  pickerDepthEnabled = !pickerDepthEnabled;
+  toggleDepthLayer(pickerMap, pickerDepthEnabled);
+  updateDepthButtonState(pickerDepthEnabled);
+});
+$("btnMapLocate").addEventListener("click", () => {
+  if (!pickerMap || !navigator.geolocation) return;
+  pickerMap.locate({ setView: true, maxZoom: 16, enableHighAccuracy: false, timeout: 8000 });
+  pickerMap.once("locationfound", e => {
+    state.lat = e.latlng.lat; state.lon = e.latlng.lng;
+    updatePickerCoordLabel();
+  });
+});
+$("btnMapFullscreen").addEventListener("click", () => toggleFullscreen(screenMap));
+
+// ============================================================
+// PWA
+// ============================================================
+(function setupPWA() {
+  function makeIcon(size) {
+    const c = document.createElement("canvas");
+    c.width = c.height = size;
+    const ctx = c.getContext("2d");
+    const grad = ctx.createLinearGradient(0, 0, size, size);
+    grad.addColorStop(0, "#0d1117"); grad.addColorStop(1, "#161b22");
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, size, size);
+    ctx.font = `${size*0.65}px serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("🎣", size/2, size/2 + size*0.05);
+    return c.toDataURL("image/png");
+  }
+  const manifest = {
+    name: "Кльов — прогноз риболовлі", short_name: "Кльов",
+    description: "Прогноз кльову мирних риб та хижаків",
+    start_url: ".", scope: ".", display: "standalone", orientation: "portrait",
+    background_color: "#0d1117", theme_color: "#0d1117", lang: "uk",
+    icons: [
+      {src: makeIcon(192), sizes: "192x192", type: "image/png", purpose: "any maskable"},
+      {src: makeIcon(512), sizes: "512x512", type: "image/png", purpose: "any maskable"}
+    ]
+  };
+  const blob = new Blob([JSON.stringify(manifest)], {type: "application/manifest+json"});
+  const link = document.createElement("link");
+  link.rel = "manifest";
+  link.href = URL.createObjectURL(blob);
+  document.head.appendChild(link);
+  const appleIcon = document.createElement("link");
+  appleIcon.rel = "apple-touch-icon";
+  appleIcon.href = makeIcon(180);
+  document.head.appendChild(appleIcon);
+})();
+
+// ============================================================
+// СТАРТ
+// ============================================================
+renderHistory();
+updateDateChips();
+(function readUrlParams() {
+  const p = new URLSearchParams(location.search);
+  const lat = parseFloat(p.get("lat")), lon = parseFloat(p.get("lon"));
+  if (!isNaN(lat) && !isNaN(lon)) {
+    state.lat = lat; state.lon = lon;
+    goToSelect();
+  }
+})();
+</script>
+</body>
+</html>
